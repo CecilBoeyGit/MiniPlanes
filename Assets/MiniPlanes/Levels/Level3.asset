@@ -1,0 +1,31 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9b6c07074e37c71448e96e365f19d72f, type: 3}
+  m_Name: Level3
+  m_EditorClassIdentifier: Assembly-CSharp::MiniPlanes.LevelConfig
+  levelName: Level 3
+  pointsToAdvance: 3
+  planeSpeed: 0.47
+  laps: 4
+  waypointSpacingDeg: 28
+  reversalChance: 0.099999994
+  minRadius: 0.38
+  maxRadius: 0.65
+  minHeight: -0.35
+  maxHeight: 0.08
+  azimuthJitterDeg: 12
+  maxEnemies: 1
+  enemySpawnInterval: 4
+  enemySpeed: 0.42000002
+  enemyFireInterval: 2.6
+  projectileSpeed: 1
+  enemyFireRange: 0.6
