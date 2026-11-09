@@ -3,12 +3,12 @@ using UnityEngine;
 
 namespace MiniPlanes
 {
-    /// <summary>A straight-flying enemy bullet. Crashes the mini plane on contact; blocked by hands.</summary>
+    /// <summary>A straight-flying machine-gun round. Damages the plane on contact; blocked by hands.</summary>
     public class Projectile : MonoBehaviour
     {
         public static readonly List<Projectile> Active = new List<Projectile>();
 
-        public float radius = 0.006f;
+        public float radius = 0.004f;
         public float lifetime = 3f;
 
         public Vector3 Position => transform.position;
@@ -25,7 +25,7 @@ namespace MiniPlanes
             if (col != null) Destroy(col);
             go.transform.localScale = Vector3.one * (radius * 2f);
             var mr = go.GetComponent<MeshRenderer>();
-            mr.sharedMaterial = material;
+            if (material != null) mr.sharedMaterial = material;
             mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             mr.receiveShadows = false;
             var p = go.AddComponent<Projectile>();
@@ -58,9 +58,9 @@ namespace MiniPlanes
             _age += dt;
 
             if (_target != null && _target.IsFlying &&
-                Vector3.Distance(transform.position, _target.Position) < radius + _target.radius)
+                Vector3.Distance(transform.position, _target.Position) < radius + _target.Radius)
             {
-                _target.Crash("shot down");
+                _target.Damage("shot down");
                 Destroy(gameObject);
                 return;
             }
@@ -70,6 +70,7 @@ namespace MiniPlanes
 
         public void Block()
         {
+            ComicVfx.Play(ComicKind.Spark, transform.position);
             Destroy(gameObject);
         }
 
