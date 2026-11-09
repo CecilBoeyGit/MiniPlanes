@@ -1,0 +1,52 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: cf484160f5e347c40ba23cbb2e5c9292, type: 3}
+  m_Name: GameArt
+  m_EditorClassIdentifier: Assembly-CSharp::MiniPlanes.GameArt
+  planeMatte: {fileID: 2100000, guid: c3d75005731a76245bfaf68f1e0ea0d7, type: 2}
+  playerMatte: {fileID: 2100000, guid: 026b7e4d09ea6d24eaaef4a0d563cf8e, type: 2}
+  fighterMatte: {fileID: 2100000, guid: 992e51a555130054f8a65751597dc653, type: 2}
+  bomberMatte: {fileID: 2100000, guid: 8f015bdfd9afe194798b4154497fadfc, type: 2}
+  turretMatte: {fileID: 2100000, guid: 136e991cb1b05604ea80038581cbba69, type: 2}
+  handRock: {fileID: 2100000, guid: d391c9301aadb3c42b570cdb5934c702, type: 2}
+  silhouette: {fileID: 2100000, guid: 2aaf014df1318554fba90682c4ba0c68, type: 2}
+  bubbleRing: {fileID: 2100000, guid: a2826d78207689d4d8c2a0673aaffd0b, type: 2}
+  pathLine: {fileID: 2100000, guid: d069bd37ef1409843968d6d7cd28743d, type: 2}
+  comicSprite: {fileID: 2100000, guid: 15270f10d41203145a76040ab24b9848, type: 2}
+  shieldBubble: {fileID: 2100000, guid: f7d587a6e893956419cdee97b61778ac, type: 2}
+  projectile: {fileID: 2100000, guid: 2b05f68c7f0a88444915f62d3285ffda, type: 2}
+  turretShot: {fileID: 2100000, guid: 6abf03eedfa6272469d4243445040532, type: 2}
+  playerPlane: {fileID: 919132149155446097, guid: df0312f1c5a6f8d449f03b86be5fdca1, type: 3}
+  enemyFighter: {fileID: 919132149155446097, guid: 00000c545f24dea4097c17eb51678e60, type: 3}
+  enemyBomber: {fileID: 919132149155446097, guid: 3731c02602d396643be61d6417074d26, type: 3}
+  balloonShield: {fileID: 919132149155446097, guid: 5accc41eb50f0e64eba60e42c5a2fd99, type: 3}
+  balloonBomb: {fileID: 919132149155446097, guid: 1befd343448ac44448729ef39cb0ccc6, type: 3}
+  balloonTurret: {fileID: 0}
+  turret: {fileID: 919132149155446097, guid: 7a86b71e3f23fac48a2ba1bd04d23957, type: 3}
+  shieldIcon: {fileID: 6348708095578724519, guid: 5316c596288064745a6550652855bf1e, type: 3}
+  bombIcon: {fileID: 57449904205575664, guid: a1d1f64f8f3f25345a802246508d64b8, type: 3}
+  turretIcon: {fileID: 4855033073084870112, guid: 8c9b20e741230084fa2c1f72ff5c8b3f, type: 3}
+  crosshair: {fileID: 8160909126527231931, guid: 8bb349c09a4a28642b8e7529162b3f53, type: 3}
+  fuelGauge: {fileID: 4150953940736357909, guid: ec8b9cd9022160746b709fe17d466345, type: 3}
+  ringOnset: {fileID: 2800000, guid: f3441c03f9761974b91d2f349ddae7e4, type: 3}
+  ringPeak: {fileID: 2800000, guid: 1abd689b6dc1afe4e8b1edf6ab388db3, type: 3}
+  ringBreakup: {fileID: 2800000, guid: 58596c04523566044a740b12935235c5, type: 3}
+  crashOnset: {fileID: 2800000, guid: aa9724de4b13adb4ea3c005ca9b25ed5, type: 3}
+  crashPeak: {fileID: 2800000, guid: 0b85d780af384bb46bc697cf35e3b5c4, type: 3}
+  crashBreakup: {fileID: 2800000, guid: 11c446695df39394cb2c6c7bd1af3871, type: 3}
+  flickOnset: {fileID: 2800000, guid: 7abeb0a69f1752546a6e0eea9f9323ad, type: 3}
+  flickPeak: {fileID: 2800000, guid: 80b09011f33156849842aa9c2b2a8b37, type: 3}
+  flickBreakup: {fileID: 2800000, guid: 6e6cfc920fb6a984c887bbff11039c76, type: 3}
+  plus1: {fileID: 2800000, guid: b3c2eb184fc3e5b49bb0cf8875a0ccb9, type: 3}
+  plus2: {fileID: 2800000, guid: a01361c9e5695ac47a0db7f3f2d111e4, type: 3}
+  hudFont: {fileID: 12800000, guid: a61b706a09218a2438645a7091231dd9, type: 3}
+  headingFont: {fileID: 12800000, guid: 3e5590ef4c4599d4faa9491005e8da34, type: 3}
