@@ -5,100 +5,249 @@ using UnityEngine;
 namespace MiniPlanes
 {
     /// <summary>
-    /// The player's little aeroplane. Follows a CatmullRomPath at constant speed, banks into turns,
-    /// and tumbles to the ground when it crashes.
+    /// The player's plane: follows the path at constant speed, banks into turns, burns fuel, carries a
+    /// one-hit shield and an optional turret, takes hits and tumbles out of the sky when it crashes. After
+    /// a crash it can respawn where it fell, if the level has lives left.
     /// </summary>
     public class MiniPlane : MonoBehaviour
     {
-        public enum State { Idle, Flying, Crashed, Finished }
+        public enum State { Idle, Waiting, Flying, Crashed, Finished }
 
-        [Tooltip("Collision radius in metres. Set automatically from the wingspan when the plane is built.")]
-        public float radius = 0.01f;
-        [Tooltip("Collision radius as a fraction of the wingspan, so the visible size matches what collides.")]
+        [Tooltip("Wingspan in metres. Small enough to fit through a C sign.")]
+        public float wingspan = 0.042f;
+        [Tooltip("Collision radius as a fraction of the wingspan, so what you see is what collides.")]
         public float collisionRadiusPerSpan = 0.25f;
         public float maxBankDeg = 60f;
         public float bankSmoothing = 8f;
         public float crashDuration = 1.4f;
+        public float propellerSpeedDeg = 1800f;
+        [Tooltip("Seconds of immunity after a hit that did not crash the plane.")]
+        public float hitGraceSeconds = 1.2f;
+        [Tooltip("Seconds of immunity after coming back from a crash.")]
+        public float respawnGraceSeconds = 2.5f;
+        [Tooltip("Turret size, as a fraction of the wingspan.")]
+        public float turretSizePerSpan = 0.22f;
 
+        public float Radius { get; private set; } = 0.01f;
         public State CurrentState { get; private set; } = State.Idle;
         public bool IsFlying => CurrentState == State.Flying;
         public Vector3 Position => transform.position;
+        /// <summary>The way the nose points.</summary>
+        public Vector3 Forward => transform.forward;
         public Vector3 Velocity { get; private set; }
         public float Speed { get; private set; }
         public float Distance { get; private set; }
         public CatmullRomPath Path { get; private set; }
         public float Progress => Path == null || Path.Length <= 0f ? 0f : Mathf.Clamp01(Distance / Path.Length);
+        public bool HasShield { get; private set; }
+        public bool HasTurret => _turret != null;
+        public PlaneTurret Turret => _turret;
+        public int HitsTaken { get; private set; }
+        public bool FuelEnabled { get; private set; }
+        public float Fuel { get; private set; }
+        public float FuelMax { get; private set; } = 1f;
+        public float Fuel01 => FuelMax > 0f ? Mathf.Clamp01(Fuel / FuelMax) : 0f;
+        public string LastCrashReason { get; private set; } = "";
+        /// <summary>The plane design being flown.</summary>
+        public PlaneDefinition Definition { get; private set; }
+        /// <summary>The crash animation has finished and the plane can respawn.</summary>
+        public bool CrashSettled => CurrentState == State.Crashed && _crashRoutine == null;
 
         public event Action<MiniPlane> Finished;
         public event Action<MiniPlane, string> Crashed;
+        public event Action<MiniPlane, string> Hit;
+        public event Action<MiniPlane> ShieldLost;
 
-        static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
-
-        MeshFilter _filter;
-        MeshRenderer _renderer;
-        ParticleSystem _smoke;
-        Vector3 _prevTangent;
+        GameArt _art;
+        Transform _head;
+        Transform _modelRoot;
+        Transform _propeller;
+        Renderer[] _modelRenderers = new Renderer[0];
+        MeshRenderer _shieldRenderer;
+        FuelGaugeView _gauge;
+        PlaneTurret _turret;
+        LevelConfig _cfg;
+        Vector3 _prevTangent = Vector3.forward;
         float _bank;
+        float _graceUntil;
+        float _shieldGrace = 1f;
         Coroutine _crashRoutine;
+        bool _visible;
 
-        public void Build(PlaneShapeParams shape, Material bodyMaterial, Material wingMaterial)
+        public void SetHead(Transform head) { _head = head; }
+
+        public void Init(GameArt art, Transform head)
         {
-            _filter = GetComponent<MeshFilter>();
-            if (_filter == null) _filter = gameObject.AddComponent<MeshFilter>();
-            _renderer = GetComponent<MeshRenderer>();
-            if (_renderer == null) _renderer = gameObject.AddComponent<MeshRenderer>();
-            _renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            _renderer.receiveShadows = false;
+            _art = art;
+            _head = head;
+            Radius = Mathf.Clamp(wingspan * collisionRadiusPerSpan, 0.004f, 0.02f);
 
-            if (_filter.sharedMesh != null) Destroy(_filter.sharedMesh);
-            _filter.sharedMesh = ProceduralPlaneMesh.Build(shape);
-            radius = Mathf.Clamp(shape.wingSpan * collisionRadiusPerSpan, 0.004f, 0.02f);
-            _renderer.sharedMaterials = new[] { bodyMaterial, wingMaterial };
+            _modelRoot = new GameObject("Model").transform;
+            _modelRoot.SetParent(transform, false);
+            SetAppearance(null, null);
 
-            var block = new MaterialPropertyBlock();
-            block.SetColor(BaseColorId, shape.bodyColor);
-            _renderer.SetPropertyBlock(block, 0);
-            block.SetColor(BaseColorId, shape.wingColor);
-            _renderer.SetPropertyBlock(block, 1);
+            if (art != null && art.shieldBubble != null)
+            {
+                var sphere = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+                sphere.name = "Shield";
+                var col = sphere.GetComponent<Collider>();
+                if (col != null) Destroy(col);
+                sphere.transform.SetParent(transform, false);
+                sphere.transform.localScale = Vector3.one * (wingspan * 1.9f);
+                _shieldRenderer = sphere.GetComponent<MeshRenderer>();
+                _shieldRenderer.sharedMaterial = art.shieldBubble;
+                _shieldRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                _shieldRenderer.receiveShadows = false;
+                _shieldRenderer.enabled = false;
+            }
 
-            _smoke = GetComponentInChildren<ParticleSystem>(true);
-            _renderer.enabled = false;
+            if (art != null && art.fuelGauge != null)
+            {
+                var gauge = Instantiate(art.fuelGauge, transform, false);
+                gauge.name = "FuelGauge";
+                _gauge = gauge.GetComponent<FuelGaugeView>();
+                gauge.SetActive(false);
+            }
+            SetVisible(false);
         }
 
-        public void Launch(CatmullRomPath path, float speed)
+        /// <summary>Swaps in a plane design and paint. Null uses the game's default player plane.</summary>
+        public void SetAppearance(PlaneDefinition definition, PlanePalette palette)
         {
-            if (_crashRoutine != null)
+            Definition = definition;
+            // Detach first: Destroy only happens at the end of the frame, and the old model must not be found before then.
+            for (int i = _modelRoot.childCount - 1; i >= 0; i--)
             {
-                StopCoroutine(_crashRoutine);
-                _crashRoutine = null;
+                var old = _modelRoot.GetChild(i);
+                old.SetParent(null, false);
+                Destroy(old.gameObject);
             }
+
+            GameObject prefab = definition != null && definition.model != null ? definition.model : _art != null ? _art.playerPlane : null;
+            Material material = definition != null && definition.material != null ? definition.material : _art != null ? _art.PlayerMaterial : null;
+            GameObject model;
+            if (prefab != null)
+            {
+                model = ModelUtil.Attach(_modelRoot, prefab, material, wingspan, ModelUtil.FitAxis.Width);
+            }
+            else
+            {
+                var shape = PlaneShapeParams.Friendly(new System.Random(7));
+                model = ModelUtil.AttachProcedural(_modelRoot, shape, _art != null ? _art.planeMatte : null);
+            }
+            _propeller = FindDeep(model.transform, "Propeller");
+            if (_art != null) ModelUtil.AddSilhouette(model, _art.silhouette);
+            PlanePaint.Apply(model, palette);
+            _modelRenderers = _modelRoot.GetComponentsInChildren<Renderer>(true);
+            foreach (var r in _modelRenderers) if (r != null) r.enabled = _visible;
+            if (_turret != null) _turret.transform.localPosition = TurretMount;
+        }
+
+        Vector3 TurretMount => (Definition != null ? Definition.turretMount : new Vector3(0f, 0.16f, -0.08f)) * wingspan;
+
+        static Transform FindDeep(Transform root, string name)
+        {
+            foreach (var t in root.GetComponentsInChildren<Transform>(true))
+                if (t.name.StartsWith(name, StringComparison.OrdinalIgnoreCase)) return t;
+            return null;
+        }
+
+        /// <summary>Holds the plane at the start of its path during the pre-flight countdown.</summary>
+        public void PrepareAtStart(CatmullRomPath path, LevelConfig cfg, bool keepShield)
+        {
+            StopCrash();
+            _cfg = cfg;
             Path = path;
-            Speed = speed;
+            Speed = cfg.planeSpeed;
             Distance = 0f;
             _bank = 0f;
-            transform.localScale = Vector3.one;
+            HitsTaken = 0;
+            LastCrashReason = "";
+            _graceUntil = 0f;
+            _shieldGrace = cfg.shieldGraceSeconds;
+            if (!keepShield) HasShield = false;
+            FuelEnabled = cfg.useFuel;
+            FuelMax = Mathf.Max(1f, cfg.fuelMax);
+            Fuel = FuelMax * cfg.startFuelFraction;
+
+            _modelRoot.localScale = Vector3.one;
+            _modelRoot.localRotation = Quaternion.identity;
             transform.position = path.PositionAt(0f);
             _prevTangent = path.TangentAt(0f);
             transform.rotation = Quaternion.LookRotation(_prevTangent, Vector3.up);
-            Velocity = _prevTangent * speed;
-            if (_renderer != null) _renderer.enabled = true;
+            Velocity = Vector3.zero;
+            CurrentState = State.Waiting;
+            SetVisible(true);
+        }
+
+        public void TakeOff()
+        {
+            if (CurrentState != State.Waiting) return;
+            Velocity = _prevTangent * Speed;
             CurrentState = State.Flying;
+        }
+
+        /// <summary>
+        /// Brings a crashed plane back onto its path where it fell, with fresh hits, some fuel and a few
+        /// seconds of immunity. Returns false if it isn't crashed.
+        /// </summary>
+        public bool Respawn()
+        {
+            if (CurrentState != State.Crashed || Path == null) return false;
+            StopCrash();
+            HitsTaken = 0;
+            LastCrashReason = "";
+            if (FuelEnabled && _cfg != null) Fuel = Mathf.Max(Fuel, FuelMax * Mathf.Max(0.5f, _cfg.startFuelFraction));
+            _modelRoot.localScale = Vector3.one;
+            _modelRoot.localRotation = Quaternion.identity;
+            Distance = Mathf.Clamp(Distance, 0f, Path.Length);
+            transform.position = Path.PositionAt(Distance);
+            _prevTangent = Path.TangentAt(Distance);
+            transform.rotation = Quaternion.LookRotation(_prevTangent, Vector3.up);
+            _bank = 0f;
+            _graceUntil = Time.time + respawnGraceSeconds;
+            Velocity = _prevTangent * Speed;
+            CurrentState = State.Flying;
+            SetVisible(true);
+            return true;
         }
 
         public void Hide()
         {
-            if (_crashRoutine != null)
-            {
-                StopCoroutine(_crashRoutine);
-                _crashRoutine = null;
-            }
+            StopCrash();
+            RemoveTurret();
             CurrentState = State.Idle;
-            if (_renderer != null) _renderer.enabled = false;
+            SetVisible(false);
+        }
+
+        void StopCrash()
+        {
+            if (_crashRoutine == null) return;
+            StopCoroutine(_crashRoutine);
+            _crashRoutine = null;
+        }
+
+        void SetVisible(bool visible)
+        {
+            _visible = visible;
+            foreach (var r in _modelRenderers) if (r != null) r.enabled = visible;
+            if (_turret != null) _turret.gameObject.SetActive(visible);
+            if (!visible)
+            {
+                if (_shieldRenderer != null) _shieldRenderer.enabled = false;
+                if (_gauge != null) _gauge.gameObject.SetActive(false);
+            }
         }
 
         void Update()
         {
+            if (_propeller != null && (CurrentState == State.Flying || CurrentState == State.Waiting))
+            {
+                Vector3 axis = _propeller.InverseTransformDirection(transform.forward);
+                _propeller.Rotate(axis, propellerSpeedDeg * Time.deltaTime, Space.Self);
+            }
             if (!IsFlying || Path == null) return;
+
             float dt = Time.deltaTime;
             if (dt <= 0f) return;
 
@@ -106,7 +255,6 @@ namespace MiniPlanes
             Vector3 pos = Path.PositionAt(Distance);
             Vector3 tangent = Path.TangentAt(Distance);
 
-            // Bank into turns: signed yaw rate -> roll.
             Vector3 flatPrev = new Vector3(_prevTangent.x, 0f, _prevTangent.z);
             Vector3 flatCur = new Vector3(tangent.x, 0f, tangent.z);
             float yawRate = 0f;
@@ -120,22 +268,119 @@ namespace MiniPlanes
             Velocity = tangent * Speed;
             _prevTangent = tangent;
 
+            if (FuelEnabled && _cfg != null)
+            {
+                Fuel -= _cfg.fuelDrainPerSecond * dt;
+                if (Fuel <= 0f)
+                {
+                    Fuel = 0f;
+                    Crash("ran out of fuel");
+                    return;
+                }
+            }
+
             if (Distance >= Path.Length)
             {
                 CurrentState = State.Finished;
+                SetVisible(false);
                 Finished?.Invoke(this);
             }
         }
 
+        void LateUpdate()
+        {
+            if (!_visible) return;
+
+            // Blink through the grace period, so the player sees the plane was just hit.
+            bool blink = Time.time < _graceUntil && Mathf.Repeat(Time.time * 10f, 1f) < 0.4f;
+            foreach (var r in _modelRenderers) if (r != null) r.enabled = !blink;
+
+            if (_shieldRenderer != null) _shieldRenderer.enabled = HasShield && CurrentState != State.Crashed;
+
+            if (_gauge != null)
+            {
+                bool showGauge = FuelEnabled && (IsFlying || CurrentState == State.Waiting);
+                if (_gauge.gameObject.activeSelf != showGauge) _gauge.gameObject.SetActive(showGauge);
+                if (showGauge)
+                {
+                    var t = _gauge.transform;
+                    t.position = transform.position + Vector3.up * (wingspan * 0.85f);
+                    if (_head != null)
+                    {
+                        Vector3 look = t.position - _head.position;
+                        if (look.sqrMagnitude > 1e-6f) t.rotation = Quaternion.LookRotation(look, Vector3.up);
+                    }
+                    _gauge.Show(Fuel01, _cfg != null && Fuel01 < _cfg.lowFuelFraction);
+                }
+            }
+        }
+
+        public void AddFuel(float amount)
+        {
+            if (!FuelEnabled) return;
+            Fuel = Mathf.Clamp(Fuel + amount, 0f, FuelMax);
+        }
+
+        public void GiveShield()
+        {
+            HasShield = true;
+        }
+
+        /// <summary>Fits the automatic turret for the rest of the flight. Fitting it again does nothing.</summary>
+        public PlaneTurret EquipTurret(LevelConfig cfg)
+        {
+            if (_turret != null) return _turret;
+            var go = new GameObject("Turret");
+            go.transform.SetParent(transform, false);
+            go.transform.localPosition = TurretMount;
+            _turret = go.AddComponent<PlaneTurret>();
+            _turret.Setup(this, cfg, _art, wingspan * turretSizePerSpan);
+            go.SetActive(_visible);
+            return _turret;
+        }
+
+        public void RemoveTurret()
+        {
+            if (_turret == null) return;
+            Destroy(_turret.gameObject);
+            _turret = null;
+        }
+
+        /// <summary>
+        /// The one entry point for anything that hurts the plane. A shield absorbs it, then remaining
+        /// hits on low-risk levels; otherwise the plane crashes. Returns true if it crashed.
+        /// </summary>
+        public bool Damage(string reason)
+        {
+            if (!IsFlying || Time.time < _graceUntil) return false;
+
+            if (HasShield)
+            {
+                HasShield = false;
+                _graceUntil = Time.time + _shieldGrace;
+                ShieldLost?.Invoke(this);
+                return false;
+            }
+
+            HitsTaken++;
+            int allowed = _cfg != null ? Mathf.Max(1, _cfg.hitsToCrash) : 1;
+            if (HitsTaken < allowed)
+            {
+                _graceUntil = Time.time + hitGraceSeconds;
+                Hit?.Invoke(this, reason);
+                return false;
+            }
+
+            Crash(reason);
+            return true;
+        }
+
+        /// <summary>Crashes immediately, past any shield. Damage is the normal route; this is for running dry.</summary>
         public void Crash(string reason)
         {
             if (!IsFlying) return;
             CurrentState = State.Crashed;
-            if (_smoke != null)
-            {
-                _smoke.transform.position = transform.position;
-                _smoke.Play(true);
-            }
+            LastCrashReason = reason;
             _crashRoutine = StartCoroutine(CrashRoutine());
             Crashed?.Invoke(this, reason);
         }
@@ -144,6 +389,7 @@ namespace MiniPlanes
         {
             Vector3 v = Velocity * 0.5f + Vector3.down * 0.15f;
             Vector3 spin = new Vector3(UnityEngine.Random.Range(-360f, 360f), UnityEngine.Random.Range(-180f, 180f), UnityEngine.Random.Range(-720f, 720f));
+            Vector3 start = transform.position;
             float t = 0f;
             while (t < crashDuration)
             {
@@ -153,11 +399,12 @@ namespace MiniPlanes
                 transform.position += v * dt;
                 transform.Rotate(spin * dt, Space.Self);
                 float k = t / crashDuration;
-                transform.localScale = Vector3.one * Mathf.Lerp(1f, 0.15f, k * k);
+                _modelRoot.localScale = Vector3.one * Mathf.Lerp(1f, 0.15f, k * k);
                 yield return null;
             }
-            if (_renderer != null) _renderer.enabled = false;
-            transform.localScale = Vector3.one;
+            SetVisible(false);
+            _modelRoot.localScale = Vector3.one;
+            transform.position = start;
             _crashRoutine = null;
         }
     }
