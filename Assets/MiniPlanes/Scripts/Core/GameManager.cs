@@ -5,140 +5,195 @@ using UnityEngine;
 namespace MiniPlanes
 {
     /// <summary>
-    /// Round and level state machine. Spawns the mini plane on a fresh hidden path each round,
-    /// counts ring passes as points, hand contact as crashes, and advances levels.
+    /// Top-level game flow: start panel, the six tutorial levels with their intro page and unlocks, the
+    /// Infinite wave mode, lives and respawns, pause, and the scoring and coins that tie rings, flicks,
+    /// turrets, bomb covers, fuel and the HUD together.
     /// </summary>
     [DefaultExecutionOrder(-10)]
     public class GameManager : MonoBehaviour
     {
-        public enum Phase { WaitingForTracking, Countdown, Flying, RoundOver, GameOver }
+        public enum Flow { Menu, Intro, PreFlight, Flying, Result }
+
+        /// <summary>The pause menu is open and the game clock is stopped. Hands must not affect the game.</summary>
+        public static bool IsPaused { get; private set; }
 
         [Header("Scene references")]
         public Transform head;
-        public FlightPathGenerator pathGenerator;
+        public GameArt art;
+        public PlaneCatalog catalog;
+        public CurvedHud hud;
+        public MenuPanel menu;
+        public PausePanel pausePanel;
+        public WristMenuButton wristMenu;
+        public PathRevealer revealer;
         public EnemySpawner spawner;
-        public ScoreHud hud;
         public HandRing[] rings;
+        public RingMerger merger;
         public HandHazard[] hazards;
         public FlickDetector[] flickers;
-        [Tooltip("Optional particle system played where the plane crashes.")]
-        public ParticleSystem crashSmoke;
 
         [Header("Levels")]
         public List<LevelConfig> levels = new List<LevelConfig>();
-        public int startingLives = 3;
+        public InfiniteConfig infinite;
 
-        [Header("Plane materials")]
-        public Material planeBodyMaterial;
-        public Material planeWingMaterial;
+        [Header("Score points")]
+        [Tooltip("Points for flying through a single-hand C ring. It is small, so it pays more.")]
+        public int singleRingPoints = 2;
+        [Tooltip("Points for flying through the big two-hand O ring. It is large and easy, so it pays less.")]
+        public int mergedRingPoints = 1;
+        [Tooltip("Points for flicking a fighter out of the sky.")]
+        public int flickPoints = 2;
+        [Tooltip("Points for flicking a bomber out of the sky. Bombers are worth extra.")]
+        public int bomberFlickPoints = 4;
+        [Tooltip("Points when the turret shoots an enemy down.")]
+        public int turretKillPoints = 1;
+
+        [Header("Coins (saved, spent in the Hangar)")]
+        public int singleRingCoins = 2;
+        public int mergedRingCoins = 1;
+        [Tooltip("For any enemy plane knocked out of the sky, by hand or turret.")]
+        public int enemyCoins = 1;
+        [Tooltip("For cupping a flashing bomb balloon until it is contained.")]
+        public int bombCoverCoins = 2;
 
         [Header("Timing")]
-        public float countdownSeconds = 3f;
-        public float roundEndDelay = 1.6f;
-        public float gameOverDelay = 4f;
+        [Tooltip("Seconds between a flight ending and the result panel appearing.")]
+        public float resultDelaySeconds = 1.6f;
+        [Tooltip("Countdown after Start is pressed, in seconds.")]
+        public float startCountdownSeconds = 2f;
 
-        [Header("Debug")]
-        [Tooltip("Show the hidden flight path (editor testing only).")]
-        public bool showPath = false;
+        [Header("Playtesting")]
+        [Tooltip("Opens every level and Infinite without saving anything. Turn off to test the real unlock flow.")]
+        public bool devUnlockAll = false;
+        [Tooltip("Lets every plane in the Hangar be flown without buying it, without saving anything.")]
+        public bool devUnlockAllPlanes = false;
+        [Tooltip("Tops the saved coins up to at least this many when the game starts. 0 does nothing.")]
+        public int devCoinsOnStart = 0;
+        [Tooltip("Wipes saved unlocks, the high score, coins and planes when the game starts.")]
+        public bool devResetProgressOnStart = false;
 
-        public Phase CurrentPhase { get; private set; } = Phase.WaitingForTracking;
+        public Flow CurrentFlow { get; private set; } = Flow.Menu;
         public int Score { get; private set; }
-        public int Lives { get; private set; }
+        public int RingsThisFlight { get; private set; }
         public int LevelIndex { get; private set; }
-        public int PointsThisLevel { get; private set; }
+        public bool InInfinite { get; private set; }
+        public int Wave { get; private set; }
+        public bool LastFlightPassed { get; private set; }
+        public int Lives { get; private set; }
+        public int LivesTotal { get; private set; }
+        /// <summary>Coins earned since the level or Infinite run began.</summary>
+        public int CoinsThisRun { get; private set; }
         public MiniPlane Plane => _plane;
+        public LevelConfig CurrentConfig => _cfg;
 
         MiniPlane _plane;
+        LevelConfig _cfg;
+        LevelConfig _waveConfig;
         int _seed;
-        bool _roundOver;
-        string _roundMessage;
-
-        LevelConfig CurrentLevel => levels != null && levels.Count > 0 ? levels[Mathf.Clamp(LevelIndex, 0, levels.Count - 1)] : null;
+        Coroutine _flow;
+        bool _startPressed;
 
         void Awake()
         {
+            IsPaused = false;
+            Time.timeScale = 1f;
+            Progression.UnlockAllOverride = devUnlockAll;
+            Progression.AllPlanesOverride = devUnlockAllPlanes;
+            if (devResetProgressOnStart) Progression.ResetAll(catalog);
+            if (devCoinsOnStart > Progression.Coins) Progression.AddCoins(devCoinsOnStart - Progression.Coins);
+            Billboard.Head = head;
+
             if (levels == null || levels.Count == 0)
             {
                 levels = new List<LevelConfig>();
-                for (int i = 1; i <= 5; i++)
+                for (int i = 1; i <= Progression.TutorialLevelCount; i++)
                 {
                     var cfg = ScriptableObject.CreateInstance<LevelConfig>();
                     cfg.ApplyDefaults(i);
                     levels.Add(cfg);
                 }
             }
+            if (infinite == null) infinite = InfiniteConfig.CreateDefault();
+
+            var vfx = new GameObject("ComicVfx").AddComponent<ComicVfx>();
+            vfx.transform.SetParent(transform, false);
+            vfx.Init(art, head);
 
             var planeGo = new GameObject("MiniPlane");
             planeGo.transform.SetParent(transform, false);
             _plane = planeGo.AddComponent<MiniPlane>();
-            if (crashSmoke != null)
-            {
-                crashSmoke.transform.SetParent(planeGo.transform, false);
-                crashSmoke.transform.localPosition = Vector3.zero;
-            }
-            _plane.Finished += OnPlaneFinished;
+            _plane.Init(art, head);
             _plane.Crashed += OnPlaneCrashed;
+            _plane.Hit += OnPlaneHit;
+            _plane.ShieldLost += OnShieldLost;
+            ApplyPlaneSelection();
 
             if (rings != null)
                 foreach (var r in rings)
                 {
                     if (r == null) continue;
-                    r.Scored += OnRingScored;
-                    r.PlaneHitRing += OnRingHit;
+                    r.Scored += OnSingleRingScored;
+                    r.PlaneHitRing += ring => DamagePlane("clipped the ring");
+                    r.Track(_plane);
                 }
+            if (merger != null)
+            {
+                merger.Scored += OnMergedRingScored;
+                merger.PlaneHitRing += m => DamagePlane("clipped the ring");
+                merger.Track(_plane);
+            }
             if (hazards != null)
                 foreach (var h in hazards)
-                    if (h != null) h.PlaneHit += OnHazardHit;
+                {
+                    if (h == null) continue;
+                    h.PlaneHit += (hazard, plane) => DamagePlane("hit your hand");
+                    h.Track(_plane);
+                }
+            if (flickers != null)
+                foreach (var f in flickers)
+                    if (f != null) f.Flicked += OnEnemyFlicked;
+            PlaneTurret.AnyEnemyDowned += OnTurretKill;
+            BombBalloon.AnyContained += OnBombContained;
 
-            _seed = (int)(System.DateTime.Now.Ticks & 0x7fffffff);
+            if (menu != null)
+            {
+                menu.LevelChosen += StartLevel;
+                menu.InfiniteChosen += StartInfinite;
+                menu.RetryChosen += Retry;
+                menu.NextChosen += Next;
+                menu.MenuChosen += ShowMenu;
+                menu.StartChosen += ConfirmStart;
+                menu.BackChosen += ShowMenu;
+                menu.PlaneChanged += ApplyPlaneSelection;
+            }
+            if (wristMenu != null) wristMenu.Pressed += Pause;
+            if (pausePanel != null)
+            {
+                pausePanel.ResumeChosen += Resume;
+                pausePanel.RestartChosen += Retry;
+                pausePanel.MainMenuChosen += ShowMenu;
+            }
+
+            _seed = (int)(System.DateTime.Now.Ticks & 0x7ffffff);
+        }
+
+        void OnDestroy()
+        {
+            PlaneTurret.AnyEnemyDowned -= OnTurretKill;
+            BombBalloon.AnyContained -= OnBombContained;
+            if (IsPaused) Time.timeScale = 1f;
+            IsPaused = false;
         }
 
         void Start()
         {
-            if (pathGenerator != null) pathGenerator.SetDebugDraw(showPath);
-            StartCoroutine(GameLoop());
+            ShowMenu();
         }
 
-        IEnumerator GameLoop()
+        void Update()
         {
-            ResetGame();
-            while (true)
-            {
-                CurrentPhase = Phase.WaitingForTracking;
-                hud?.SetMessage("Look straight ahead and make a C with your index finger and thumb\nto turn your hand into a ring.");
-                float waited = 0f;
-                while (!HeadReady() && waited < 6f)
-                {
-                    waited += Time.deltaTime;
-                    yield return null;
-                }
-
-                CurrentPhase = Phase.Countdown;
-                float t = countdownSeconds;
-                while (t > 0f)
-                {
-                    hud?.SetMessage($"Round starting in {Mathf.CeilToInt(t)}");
-                    t -= Time.deltaTime;
-                    yield return null;
-                }
-
-                StartRound();
-                CurrentPhase = Phase.Flying;
-                while (!_roundOver) yield return null;
-
-                CurrentPhase = Phase.RoundOver;
-                spawner?.End();
-                hud?.SetMessage(_roundMessage);
-                yield return new WaitForSeconds(roundEndDelay);
-
-                if (Lives <= 0)
-                {
-                    CurrentPhase = Phase.GameOver;
-                    hud?.SetMessage($"Game over!  Final score {Score}\nRestarting...");
-                    yield return new WaitForSeconds(gameOverDelay);
-                    ResetGame();
-                }
-            }
+            if (hud != null && (CurrentFlow == Flow.Flying || CurrentFlow == Flow.PreFlight))
+                hud.SetProgress(_plane.Progress);
         }
 
         bool HeadReady()
@@ -146,86 +201,397 @@ namespace MiniPlanes
             return head != null && head.position.y > 0.3f;
         }
 
-        Vector3 HeadPosition => HeadReady() ? head.position : new Vector3(0f, 1.1f, 0f);
-        Vector3 HeadForward => head != null ? head.forward : Vector3.forward;
-
-        void ResetGame()
+        /// <summary>Puts the plane chosen in the Hangar, with its paint, on the mini plane.</summary>
+        public void ApplyPlaneSelection()
         {
-            Score = 0;
-            Lives = startingLives;
-            LevelIndex = 0;
-            PointsThisLevel = 0;
+            if (_plane == null || catalog == null || catalog.Count == 0) return;
+            int index = catalog.IndexOf(Progression.SelectedPlane);
+            if (!catalog.IsOwned(index)) index = 0;
+            var def = catalog.Get(index);
+            int palette = Progression.PaletteFor(def.id);
+            var paint = def.palettes != null && palette < def.palettes.Length ? def.palettes[palette] : null;
+            _plane.SetAppearance(def, paint);
+        }
+
+        // ---------------------------------------------------------------- flow control
+
+        public void ShowMenu()
+        {
+            Switch(MenuRoutine());
+        }
+
+        public void StartLevel(int zeroBasedLevel)
+        {
+            if (zeroBasedLevel < 0 || zeroBasedLevel >= levels.Count) return;
+            if (!Progression.IsLevelUnlocked(zeroBasedLevel)) return;
+            Switch(LevelRoutine(zeroBasedLevel));
+        }
+
+        public void StartInfinite()
+        {
+            if (!Progression.InfiniteUnlocked) return;
+            Switch(InfiniteRoutine());
+        }
+
+        /// <summary>For automated tests: sets the lives left in the current level or run.</summary>
+        public void DebugSetLives(int lives)
+        {
+            Lives = Mathf.Clamp(lives, 0, Mathf.Max(lives, LivesTotal));
+            if (hud != null) hud.SetLives(Lives, LivesTotal);
+        }
+
+        /// <summary>The Start button on a tutorial level's intro page.</summary>
+        public void ConfirmStart()
+        {
+            if (CurrentFlow == Flow.Intro) _startPressed = true;
+        }
+
+        void Retry()
+        {
+            if (InInfinite) StartInfinite();
+            else StartLevel(LevelIndex);
+        }
+
+        void Next()
+        {
+            if (InInfinite || LevelIndex + 1 >= levels.Count) ShowMenu();
+            else StartLevel(LevelIndex + 1);
+        }
+
+        void Switch(IEnumerator routine)
+        {
+            EndPause();
+            if (_flow != null) StopCoroutine(_flow);
+            _flow = StartCoroutine(routine);
+        }
+
+        /// <summary>Stops the game clock and opens the pause menu. Only works during a flight.</summary>
+        public void Pause()
+        {
+            if (IsPaused || (CurrentFlow != Flow.Flying && CurrentFlow != Flow.PreFlight)) return;
+            IsPaused = true;
+            Time.timeScale = 0f;
+            SetGameplayInput(false);
+            if (hud != null) hud.gameObject.SetActive(false);
+            if (pausePanel != null) pausePanel.Open();
+        }
+
+        /// <summary>Closes the pause menu and carries on with the flight.</summary>
+        public void Resume()
+        {
+            if (!IsPaused) return;
+            EndPause();
+            SetGameplayInput(true);
+        }
+
+        void EndPause()
+        {
+            if (!IsPaused) return;
+            IsPaused = false;
+            Time.timeScale = 1f;
+            if (hud != null) hud.gameObject.SetActive(true);
+            if (pausePanel != null) pausePanel.Close();
+        }
+
+        void SetGameplayInput(bool enabled)
+        {
+            if (rings != null)
+                foreach (var r in rings)
+                    if (r != null) r.GameplayEnabled = enabled;
+        }
+
+        void Clean()
+        {
+            if (spawner != null) spawner.End();
+            if (revealer != null) revealer.End();
+            _plane.RemoveTurret();
+        }
+
+        void HideHud()
+        {
+            if (hud == null) return;
+            hud.SetVisible(false);
+            hud.SetCaption("");
+        }
+
+        IEnumerator MenuRoutine()
+        {
+            CurrentFlow = Flow.Menu;
+            InInfinite = false;
+            SetGameplayInput(false);
+            Clean();
             _plane.Hide();
-            spawner?.End();
-            RefreshStatus();
+            HideHud();
+
+            float waited = 0f;
+            while (!HeadReady() && waited < 3f)
+            {
+                waited += Time.deltaTime;
+                yield return null;
+            }
+            // Give tracking a moment to settle before placing the panel.
+            yield return null;
+            if (menu != null) menu.ShowStart(levels);
         }
 
-        void StartRound()
+        IEnumerator LevelRoutine(int index)
         {
-            var cfg = CurrentLevel;
+            LevelIndex = index;
+            InInfinite = false;
+            Score = 0;
+            CoinsThisRun = 0;
+            _cfg = levels[index];
+            LivesTotal = Mathf.Max(1, _cfg.lives);
+            Lives = LivesTotal;
+
+            yield return Flight(_cfg, "LV " + _cfg.levelNumber, _cfg.levelName + "\n" + _cfg.introCaption, false, true);
+
+            bool finished = _plane.CurrentState == MiniPlane.State.Finished;
+            bool enoughRings = RingsThisFlight >= _cfg.requiredRingPasses;
+            LastFlightPassed = finished && enoughRings;
+
+            if (LastFlightPassed) Progression.MarkPassed(index);
+
+            yield return new WaitForSeconds(resultDelaySeconds);
+            Clean();
+            HideHud();
+            SetGameplayInput(false);
+            CurrentFlow = Flow.Result;
+
+            string detail;
+            bool hasNext = index + 1 < levels.Count;
+            string nextLabel = hasNext ? "NEXT" : "MENU";
+            if (LastFlightPassed)
+            {
+                detail = !hasNext
+                    ? "Every tutorial level passed.\nInfinite mode is now unlocked."
+                    : "Level " + (index + 2) + " is unlocked.";
+            }
+            else if (!finished)
+            {
+                detail = "Out of lives. Your plane " + _plane.LastCrashReason + ".";
+            }
+            else
+            {
+                detail = "The plane made it, but needed " + _cfg.requiredRingPasses + " ring passes. You got " + RingsThisFlight + ".";
+            }
+            if (menu != null)
+                menu.ShowResult(LastFlightPassed ? "LEVEL PASSED" : "TRY AGAIN", detail, "SCORE  " + Score, LastFlightPassed, LastFlightPassed, nextLabel, CoinsThisRun);
+        }
+
+        IEnumerator InfiniteRoutine()
+        {
+            InInfinite = true;
+            Score = 0;
+            Wave = 0;
+            CoinsThisRun = 0;
+            LivesTotal = Mathf.Max(1, infinite.lives);
+            Lives = LivesTotal;
+            if (_waveConfig != null) Destroy(_waveConfig);
+            _waveConfig = infinite.baseLevel != null
+                ? Instantiate(infinite.baseLevel)
+                : ScriptableObject.CreateInstance<LevelConfig>();
+            _waveConfig.hideFlags = HideFlags.DontSave;
+            _cfg = _waveConfig;
+
+            bool alive = true;
+            while (alive)
+            {
+                Wave++;
+                infinite.Apply(_waveConfig, Wave);
+                yield return Flight(_waveConfig, "W " + Wave, "WAVE " + Wave, Wave > 1, false);
+                alive = _plane.CurrentState == MiniPlane.State.Finished;
+                if (alive) AddCoins(infinite.coinsPerWave);
+                if (spawner != null) spawner.End();
+            }
+
+            LastFlightPassed = false;
+            bool best = Progression.ReportScore(Score);
+            yield return new WaitForSeconds(resultDelaySeconds);
+            Clean();
+            HideHud();
+            SetGameplayInput(false);
+            CurrentFlow = Flow.Result;
+            if (menu != null)
+                menu.ShowResult(best ? "NEW BEST" : "GAME OVER",
+                    "You reached wave " + Wave + ".\nYour plane " + _plane.LastCrashReason + ".",
+                    "SCORE  " + Score, best, false, "MENU", CoinsThisRun);
+        }
+
+        /// <summary>
+        /// One flight along one path: the intro page or a countdown, take-off, then flying until the path
+        /// ends or the lives run out. Each crash with lives left brings the plane back where it fell.
+        /// </summary>
+        IEnumerator Flight(LevelConfig cfg, string levelLabel, string intro, bool keepShield, bool needsStart)
+        {
+            CurrentFlow = needsStart ? Flow.Intro : Flow.PreFlight;
+            if (menu != null && !needsStart) menu.Close();
+            Clean();
+            SetGameplayInput(true);
+            RingsThisFlight = 0;
+            _cfg = cfg;
             _seed++;
-            var rng = new System.Random(_seed);
 
-            var path = pathGenerator.Generate(cfg, HeadPosition, HeadForward, _seed);
-            _plane.Build(PlaneShapeParams.Friendly(rng), planeBodyMaterial, planeWingMaterial);
-            _plane.Launch(path, cfg.planeSpeed);
+            Vector3 headPos = HeadReady() ? head.position : new Vector3(0f, 1.1f, 0f);
+            Vector3 headFwd = head != null ? head.forward : Vector3.forward;
 
-            if (rings != null) foreach (var r in rings) if (r != null) r.Track(_plane);
-            if (hazards != null) foreach (var h in hazards) if (h != null) h.Track(_plane);
-            spawner?.Begin(cfg, _plane, _seed);
+            var path = FlightPathGenerator.Build(cfg, headPos, headFwd, _seed);
+            _plane.PrepareAtStart(path, cfg, keepShield);
+            if (revealer != null) revealer.Begin(path, cfg, _plane);
 
-            _roundOver = false;
-            _roundMessage = string.Empty;
-            hud?.ClearMessage();
-            RefreshStatus();
+            if (hud != null)
+            {
+                // During a tutorial intro the HUD stays hidden behind the Start page; it appears on Start.
+                hud.SetVisible(!needsStart);
+                hud.SetLevelLabel(levelLabel);
+                hud.SetScore(Score);
+                hud.SetProgress(0f);
+                hud.SetCoins(Progression.Coins);
+                hud.SetLives(Lives, LivesTotal);
+                hud.SetCaption("");
+            }
+
+            float countdown;
+            if (needsStart)
+            {
+                _startPressed = false;
+                if (menu != null) menu.ShowIntro(cfg.levelNumber, cfg.levelName, cfg.introCaption, LivesTotal);
+                while (!_startPressed) yield return null;
+                if (menu != null) menu.Close();
+                if (hud != null) hud.SetVisible(true);
+                CurrentFlow = Flow.PreFlight;
+                countdown = Mathf.Max(0.5f, startCountdownSeconds);
+                intro = "";
+            }
+            else
+            {
+                countdown = Mathf.Max(0.5f, cfg.preFlightSeconds);
+            }
+
+            float t = countdown;
+            while (t > 0f)
+            {
+                if (hud != null)
+                {
+                    string count = t <= 3f ? "Take-off in " + Mathf.CeilToInt(t) : "";
+                    hud.SetCaption(string.IsNullOrEmpty(intro) ? count : intro + "\n" + count);
+                }
+                t -= Time.deltaTime;
+                yield return null;
+            }
+            if (hud != null) hud.SetCaption("");
+
+            _plane.TakeOff();
+            if (revealer != null) revealer.OnTakeOff();
+            if (spawner != null) spawner.Begin(cfg, _plane, headFwd, _seed);
+            CurrentFlow = Flow.Flying;
+
+            while (true)
+            {
+                while (_plane.IsFlying) yield return null;
+                if (_plane.CurrentState != MiniPlane.State.Crashed) break;
+
+                Lives = Mathf.Max(0, Lives - 1);
+                if (hud != null) hud.SetLives(Lives, LivesTotal);
+                if (Lives <= 0) break;
+
+                // Let the crash play out, clear any bullets in the air, then carry on from where it fell.
+                float waited = 0f;
+                while (!_plane.CrashSettled && waited < 3f)
+                {
+                    waited += Time.deltaTime;
+                    yield return null;
+                }
+                Projectile.DestroyAll();
+                if (hud != null) hud.SetCaption(Lives == 1 ? "LAST LIFE" : Lives + " LIVES LEFT", 1.5f);
+                _plane.Respawn();
+            }
+
+            if (spawner != null) spawner.End();
+            if (revealer != null) revealer.End();
+            _plane.RemoveTurret();
+            if (hud != null && _plane.CurrentState == MiniPlane.State.Finished) hud.SetProgress(1f);
         }
 
-        void RefreshStatus()
+        // ---------------------------------------------------------------- gameplay events
+
+        void DamagePlane(string reason)
         {
-            hud?.SetStatus(Score, Lives, CurrentLevel != null ? CurrentLevel.levelName : string.Empty);
+            if (CurrentFlow == Flow.Flying) _plane.Damage(reason);
         }
 
-        void OnPlaneFinished(MiniPlane plane)
+        void OnSingleRingScored(HandRing ring, Vector3 point)
         {
-            if (_roundOver) return;
-            _roundOver = true;
-            _roundMessage = PointsThisLevel > 0 || Score > 0 ? "The plane got away." : "Missed! Put a ring on its path.";
+            RegisterRing(singleRingPoints, singleRingCoins, point);
+        }
+
+        void OnMergedRingScored(RingMerger m, Vector3 point)
+        {
+            RegisterRing(mergedRingPoints, mergedRingCoins, point);
+        }
+
+        void RegisterRing(int points, int coins, Vector3 point)
+        {
+            if (CurrentFlow != Flow.Flying) return;
+            RingsThisFlight++;
+            AddScore(points, point);
+            AddCoins(coins);
+            ComicVfx.Play(ComicKind.RingPass, point);
+            if (_cfg != null) _plane.AddFuel(_cfg.FuelPerRing);
+            if (revealer != null) revealer.OnRingPass();
+        }
+
+        void OnEnemyFlicked(FlickDetector detector, EnemyPlane enemy)
+        {
+            if (CurrentFlow != Flow.Flying) return;
+            AddScore(enemy is BomberPlane ? bomberFlickPoints : flickPoints, enemy.Position);
+            AddCoins(enemyCoins);
+        }
+
+        void OnTurretKill(PlaneTurret turret, EnemyPlane enemy)
+        {
+            if (CurrentFlow != Flow.Flying) return;
+            AddScore(turretKillPoints, enemy.Position);
+            AddCoins(enemyCoins);
+        }
+
+        void OnBombContained(BombBalloon bomb)
+        {
+            if (CurrentFlow != Flow.Flying) return;
+            AddCoins(bombCoverCoins);
+        }
+
+        void AddScore(int points, Vector3 at)
+        {
+            Score += points;
+            if (hud != null) hud.SetScore(Score);
+            if (points == 1) ComicVfx.Play(ComicKind.Plus1, at + Vector3.up * 0.05f);
+            else if (points > 1) ComicVfx.Play(ComicKind.Plus2, at + Vector3.up * 0.05f);
+        }
+
+        void AddCoins(int coins)
+        {
+            if (coins <= 0) return;
+            Progression.AddCoins(coins);
+            CoinsThisRun += coins;
+            if (hud != null) hud.SetCoins(Progression.Coins);
+        }
+
+        void OnPlaneHit(MiniPlane plane, string reason)
+        {
+            ComicVfx.Play(ComicKind.Spark, plane.Position, 0.07f);
+            if (revealer != null) revealer.BreakStreak();
+        }
+
+        void OnShieldLost(MiniPlane plane)
+        {
+            ComicVfx.Play(ComicKind.ShieldPop, plane.Position);
         }
 
         void OnPlaneCrashed(MiniPlane plane, string reason)
         {
-            if (_roundOver) return;
-            _roundOver = true;
-            Lives = Mathf.Max(0, Lives - 1);
-            _roundMessage = $"Crashed: {reason}.";
-            RefreshStatus();
-        }
-
-        void OnRingScored(HandRing ring)
-        {
-            if (_roundOver) return;
-            Score++;
-            PointsThisLevel++;
-            hud?.SetMessage("+1", 0.6f);
-
-            var cfg = CurrentLevel;
-            if (cfg != null && PointsThisLevel >= cfg.pointsToAdvance && LevelIndex < levels.Count - 1)
-            {
-                LevelIndex++;
-                PointsThisLevel = 0;
-                hud?.SetMessage($"Level up!  {CurrentLevel.levelName}", 2f);
-            }
-            RefreshStatus();
-        }
-
-        void OnRingHit(HandRing ring)
-        {
-            _plane.Crash("clipped the ring");
-        }
-
-        void OnHazardHit(HandHazard hazard, MiniPlane plane)
-        {
-            plane.Crash("hit your hand");
+            ComicVfx.Play(ComicKind.Crash, plane.Position);
+            if (revealer != null) revealer.BreakStreak();
         }
     }
 }
