@@ -12,20 +12,67 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9b6c07074e37c71448e96e365f19d72f, type: 3}
   m_Name: Level5
   m_EditorClassIdentifier: Assembly-CSharp::MiniPlanes.LevelConfig
-  levelName: Level 5
-  pointsToAdvance: 3
-  planeSpeed: 0.59
-  laps: 5
-  waypointSpacingDeg: 24
-  reversalChance: 0.16
-  minRadius: 0.38
-  maxRadius: 0.65
-  minHeight: -0.35
-  maxHeight: 0.08
-  azimuthJitterDeg: 18
-  maxEnemies: 3
-  enemySpawnInterval: 3
-  enemySpeed: 0.54
-  enemyFireInterval: 2
-  projectileSpeed: 1.2
-  enemyFireRange: 0.6
+  defaultsVersion: 7
+  levelName: Fair Winds
+  levelNumber: 5
+  introCaption: 'Pinch a balloon''s crosshair and drag it onto the flight path.
+
+    Blue
+    shields your plane from one hit. Gold fits a turret that shoots enemies.'
+  requiredRingPasses: 3
+  hitsToCrash: 1
+  lives: 3
+  planeSpeed: 0.3
+  pathDurationSeconds: 36
+  preFlightSeconds: 3
+  frontArcDeg: 130
+  randomness: 0.15
+  turnRadius: 0.13
+  allowLoops: 0
+  minRadius: 0.36
+  maxRadius: 0.56
+  minHeight: -0.32
+  maxHeight: 0.06
+  revealMode: 1
+  startRevealSeconds: 3
+  streakToReveal: 3
+  streakRevealSeconds: 2.5
+  streakResetSeconds: 12
+  pathAlpha: 0.4
+  revealFadeSeconds: 0.4
+  useFuel: 1
+  fuelMax: 100
+  fuelDrainPerSecond: 5
+  ringsToFillTank: 3
+  startFuelFraction: 1
+  lowFuelFraction: 0.3
+  maxFighters: 1
+  fighterSpawnInterval: 11
+  fighterSpeed: 0.3
+  burstCount: 3
+  burstSpacing: 0.14
+  burstInterval: 2.6
+  projectileSpeed: 0.7
+  fireRange: 0.55
+  useBalloons: 1
+  shieldBalloonInterval: 11
+  balloonLifetime: 16
+  balloonFollowSeconds: 1.6
+  shieldGraceSeconds: 1
+  turretBalloonInterval: 18
+  turretRange: 0.6
+  turretFireInterval: 0.5
+  turretShotSpeed: 1.1
+  maxBombers: 0
+  bomberSpawnInterval: 14
+  bomberSpeed: 0.3
+  bomberExitMultiplier: 1.4
+  bombLeadSeconds: 3
+  bombPathOffset: 0.07
+  explosionRange: 0.3
+  bombArmProximity: 0.18
+  bombFuseSeconds: 2
+  bombBlastRadius: 0.3
+  bombCoverDistance: 0.13
+  bombCoverHoldSeconds: 0.2
+  bombLifetime: 18

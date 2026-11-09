@@ -1,0 +1,41 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 968be4901314716418dac41b647fce4e, type: 3}
+  m_Name: Infinite
+  m_EditorClassIdentifier: Assembly-CSharp::MiniPlanes.InfiniteConfig
+  baseLevel: {fileID: 11400000, guid: a365023b17dac1a44b8aae4d566ebdc8, type: 2}
+  rampWaves: 6
+  waveDurationSeconds: 32
+  ringsRequiredPerWave: 0
+  startSpeed: 0.3
+  capSpeed: 0.52
+  startRandomness: 0.3
+  capRandomness: 0.85
+  startArcDeg: 120
+  capArcDeg: 165
+  lives: 3
+  coinsPerWave: 5
+  startTurnRadius: 0.13
+  capTurnRadius: 0.08
+  loopsFromWave: 4
+  fuelFromWave: 2
+  balloonsFromWave: 3
+  fightersFromWave: 2
+  capFighters: 3
+  startFighterInterval: 11
+  capFighterInterval: 5
+  capFighterSpeed: 0.42
+  capBurstInterval: 1.8
+  bombersFromWave: 4
+  capBombers: 2
+  startBomberInterval: 16
+  capBomberInterval: 9
