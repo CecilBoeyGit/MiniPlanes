@@ -107,3 +107,9 @@ InitTestScene*.unity*
 
 # Auto-generated cache in Assets folder
 /[Aa]ssets/[Ss]ceneDependencyCache*
+
+# Raw Tripo downloads, about 60 MB each
+/Tools/Tripo/runs/
+
+# Python bytecode from the art tools
+__pycache__/
