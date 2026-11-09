@@ -32,7 +32,7 @@ namespace MiniPlanes
 
         void LateUpdate()
         {
-            if (hand == null || !hand.IsTracked ||
+            if (GameManager.IsPaused || hand == null || !hand.IsTracked ||
                 !hand.TryGetJoint(HandJoint.Palm, out var palm) ||
                 !hand.TryGetJoint(HandJoint.IndexTip, out var index))
             {

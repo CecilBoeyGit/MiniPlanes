@@ -5,27 +5,36 @@ using UnityEngine;
 namespace MiniPlanes
 {
     /// <summary>
-    /// Detects a C sign made with the index finger and thumb and turns the enclosed loop into a
-    /// scoring ring. A closed OK sign counts too (a C with no gap). Scoring and ring collisions use
-    /// the real finger polygon: crossing inside it scores, touching one of its fingers crashes.
+    /// Detects a C sign made with the index finger and thumb and fills a bubble scoring ring inside it.
+    /// The bubble's outline follows the shape of the finger loop. A closed OK sign counts too (a C with no
+    /// gap). The plane scores by flying through the bubble or the finger loop, from either side. Touching
+    /// one of the loop's fingers is a hit.
     /// </summary>
     [DefaultExecutionOrder(50)]
     public class HandRing : MonoBehaviour
     {
+        const int ContourSamples = BubbleRingVisual.ContourSamples;
+
         public HandSource hand;
 
         [Header("C-sign detection (metres and degrees, scaled by hand size)")]
-        [Tooltip("Largest thumb-tip to index-tip gap that still counts as a C. A closed OK sign (gap 0) also counts.")]
-        public float maxGapEnter = 0.075f;
+        [Tooltip("Largest thumb-tip to index-tip gap that still counts as a C.")]
+        public float maxGapEnter = 0.085f;
         [Tooltip("Gap above which an active C releases (hysteresis).")]
-        public float maxGapExit = 0.09f;
+        public float maxGapExit = 0.105f;
         [Tooltip("Index finger curl window for a C: 0 is straight, 180 is fully curled.")]
-        public float minCurlDeg = 30f;
-        public float maxCurlDeg = 125f;
+        public float minCurlDeg = 25f;
+        public float maxCurlDeg = 135f;
         [Tooltip("Minimum area enclosed by the thumb-index loop, in square metres. Rejects pinches and fists.")]
-        public float minLoopArea = 0.0004f;
-        [Tooltip("Pose must be held this long before the ring activates, in seconds.")]
-        public float activateDelay = 0.08f;
+        public float minLoopArea = 0.0003f;
+        [Tooltip("Seconds the C can drop out, from a tracking glitch, before the ring lets go.")]
+        public float releaseGraceSeconds = 0.1f;
+
+        [Header("Radial fill")]
+        [Tooltip("Seconds the bubble takes to fill. It scores only once full.")]
+        public float fillSeconds = 0.24f;
+        [Tooltip("Seconds the bubble takes to collapse after the hand opens.")]
+        public float unfillSeconds = 0.12f;
 
         [Header("Ring geometry")]
         [Tooltip("Approximate finger radius used for the crash band around the loop's fingers.")]
@@ -35,16 +44,21 @@ namespace MiniPlanes
         [Tooltip("Extra margin around the loop fingers inside which the ring test takes over from bone capsules.")]
         public float zoneMargin = 0.012f;
         public float scoreCooldown = 0.5f;
+        [Tooltip("Bubble size as a fraction of the finger loop. Below 1 it sits just inside the fingers.")]
+        public float visualRadiusScale = 0.935f;
+        [Range(0f, 1f), Tooltip("0 is a plain circle. 1 follows the finger loop exactly.")]
+        public float shapeFollow = 0.8f;
+        [Tooltip("How quickly the outline catches up with the fingers. Lower hides more tracking jitter.")]
+        public float shapeFollowRate = 20f;
+        public float scoredFlashSeconds = 0.35f;
 
         [Header("Visuals")]
-        public MeshRenderer ringVisual;
-        public Material activeMaterial;
-        public Material scoredMaterial;
-        public float scoredFlashSeconds = 0.35f;
-        [Tooltip("Visual ring radius as a fraction of the loop's mean joint radius, so it sits inside the fingers.")]
-        public float visualRadiusScale = 0.85f;
+        public Material bubbleMaterial;
 
+        /// <summary>The ring is full and can score.</summary>
         public bool IsActive { get; private set; }
+        public bool GestureHeld { get; private set; }
+        public float Fill { get; private set; }
         public float Gap { get; private set; }
         public float IndexCurlDeg { get; private set; }
         public Vector3 Center { get; private set; }
@@ -52,8 +66,17 @@ namespace MiniPlanes
         /// <summary>Mean distance from the centre to the loop's finger joints.</summary>
         public float Radius { get; private set; }
         public float LoopArea { get; private set; }
+        public float BubbleRadius => Radius * visualRadiusScale;
+        public IReadOnlyList<Vector3> LoopPoints => _loop;
 
-        public event Action<HandRing> Scored;
+        /// <summary>Off while menus are open.</summary>
+        public bool GameplayEnabled { get; set; } = true;
+        /// <summary>This hand is holding a balloon crosshair, so its pinch must not make a ring.</summary>
+        public bool Suppressed { get; set; }
+        /// <summary>This hand's ring has merged into the big O, which takes over visuals and scoring.</summary>
+        public bool MergedHidden { get; set; }
+
+        public event Action<HandRing, Vector3> Scored;
         public event Action<HandRing> PlaneHitRing;
 
         MiniPlane _plane;
@@ -61,12 +84,14 @@ namespace MiniPlanes
         float _prevSigned;
         Vector3 _prevPos;
         float _lastScoreTime = -10f;
-        float _poseTimer;
-        float _flashUntil;
-        bool _gapClosed;
+        float _lastPoseTime = -10f;
+        BubbleRingVisual _visual;
         Vector3 _tangent, _bitangent;
         readonly List<Vector3> _loop = new List<Vector3>(8);
         readonly List<Vector2> _loop2D = new List<Vector2>(8);
+        readonly float[] _contour = new float[ContourSamples];
+        readonly float[] _contourRaw = new float[ContourSamples];
+        readonly float[] _contourTemp = new float[ContourSamples];
 
         // Loop order: up the index finger to its tip, across the gap to the thumb tip, down the thumb,
         // then across the palm web back to the index knuckle. Only the tip-to-tip edge is open air.
@@ -85,21 +110,14 @@ namespace MiniPlanes
 
         void Awake()
         {
-            if (ringVisual != null) return;
+            for (int i = 0; i < ContourSamples; i++) _contour[i] = 1f;
             // The hand root is scaled by hand size, so the visual lives at the scene root.
-            var go = new GameObject("RingVisual_" + (hand != null ? hand.side.ToString() : name));
-            var filter = go.AddComponent<MeshFilter>();
-            filter.sharedMesh = TorusMesh.Build();
-            ringVisual = go.AddComponent<MeshRenderer>();
-            ringVisual.sharedMaterial = activeMaterial;
-            ringVisual.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            ringVisual.receiveShadows = false;
-            ringVisual.enabled = false;
+            _visual = BubbleRingVisual.Create("Ring_" + (hand != null ? hand.side.ToString() : name), bubbleMaterial);
         }
 
         void OnDestroy()
         {
-            if (ringVisual != null && ringVisual.transform.parent == null) Destroy(ringVisual.gameObject);
+            if (_visual != null) _visual.DestroySelf();
         }
 
         void LateUpdate()
@@ -107,7 +125,7 @@ namespace MiniPlanes
             UpdatePose();
             UpdateVisual();
 
-            if (IsActive && _plane != null && _plane.IsFlying)
+            if (IsActive && !MergedHidden && _plane != null && _plane.IsFlying)
                 CheckCrossing();
             else
                 _hadPrev = false;
@@ -117,49 +135,49 @@ namespace MiniPlanes
 
         void UpdatePose()
         {
-            if (hand == null || !hand.IsTracked)
+            bool allowed = GameplayEnabled && !Suppressed;
+            bool pose = allowed && EvaluateGesture();
+            if (pose)
             {
-                Deactivate();
-                return;
+                _lastPoseTime = Time.time;
+                UpdateContour();
             }
+            GestureHeld = allowed && (pose || (GestureHeld && Time.time - _lastPoseTime <= releaseGraceSeconds));
+
+            bool wasFull = Fill >= 1f;
+            float rate = GestureHeld ? 1f / Mathf.Max(0.01f, fillSeconds) : -1f / Mathf.Max(0.01f, unfillSeconds);
+            Fill = Mathf.Clamp01(Fill + rate * Time.deltaTime);
+            IsActive = GestureHeld && Fill >= 1f;
+
+            if (IsActive && !wasFull)
+            {
+                _hadPrev = false;
+                if (_visual != null) _visual.Kick();
+            }
+        }
+
+        bool EvaluateGesture()
+        {
+            if (hand == null || !hand.IsTracked) return false;
 
             if (!hand.TryGetJoint(HandJoint.ThumbTip, out var thumbTip) ||
                 !hand.TryGetJoint(HandJoint.IndexTip, out var indexTip) ||
                 !hand.TryGetJoint(HandJoint.IndexProximal, out var indexProximal) ||
                 !hand.TryGetJoint(HandJoint.IndexIntermediate, out var indexIntermediate) ||
                 !hand.TryGetJoint(HandJoint.IndexDistal, out var indexDistal))
-            {
-                Deactivate();
-                return;
-            }
+                return false;
 
             float scale = Scale;
             Gap = Vector3.Distance(thumbTip, indexTip);
             IndexCurlDeg = Vector3.Angle(indexIntermediate - indexProximal, indexTip - indexDistal);
 
-            if (!_gapClosed && Gap <= maxGapEnter * scale) _gapClosed = true;
-            else if (_gapClosed && Gap > maxGapExit * scale) _gapClosed = false;
+            // The wider release limit only helps hold a ring that already exists.
+            bool gapOk = Gap <= (GestureHeld ? maxGapExit : maxGapEnter) * scale;
 
             float slack = IsActive ? 8f : 0f;
             bool curlOk = IndexCurlDeg >= minCurlDeg - slack && IndexCurlDeg <= maxCurlDeg + slack;
 
-            if (!_gapClosed || !curlOk || !UpdateGeometry() || LoopArea < minLoopArea * scale * scale)
-            {
-                Deactivate();
-                return;
-            }
-
-            _poseTimer += Time.deltaTime;
-            bool wasActive = IsActive;
-            IsActive = _poseTimer >= activateDelay;
-            if (IsActive && !wasActive) _hadPrev = false;
-        }
-
-        void Deactivate()
-        {
-            _poseTimer = 0f;
-            IsActive = false;
-            _hadPrev = false;
+            return gapOk && curlOk && UpdateGeometry() && LoopArea >= minLoopArea * scale * scale;
         }
 
         bool UpdateGeometry()
@@ -213,6 +231,69 @@ namespace MiniPlanes
             return true;
         }
 
+        Vector3 RingAxis()
+        {
+            Vector3 up = Mathf.Abs(Vector3.Dot(Normal, Vector3.up)) > 0.95f ? Vector3.forward : Vector3.up;
+            return Vector3.Cross(up, Normal);
+        }
+
+        /// <summary>Measures the finger loop in each direction around the ring, so the bubble can follow its shape.</summary>
+        void UpdateContour()
+        {
+            if (Radius <= 1e-5f) return;
+            BubbleRingVisual.Frame(Normal, RingAxis(), out Vector3 x, out Vector3 y);
+            for (int i = 0; i < ContourSamples; i++)
+            {
+                float a = i / (float)ContourSamples * Mathf.PI * 2f;
+                Vector3 dir = x * Mathf.Sin(a) + y * Mathf.Cos(a);
+                float r = RayToLoop(new Vector2(Vector3.Dot(dir, _tangent), Vector3.Dot(dir, _bitangent)));
+                _contourRaw[i] = r > 0f ? r / Radius : 1f;
+            }
+
+            // Knuckles and finger tips are corners. Round them off, so it reads as a bubble and not a polygon.
+            for (int pass = 0; pass < 2; pass++)
+            {
+                for (int i = 0; i < ContourSamples; i++)
+                {
+                    float before = _contourRaw[(i + ContourSamples - 1) % ContourSamples];
+                    float after = _contourRaw[(i + 1) % ContourSamples];
+                    _contourTemp[i] = 0.25f * before + 0.5f * _contourRaw[i] + 0.25f * after;
+                }
+                Array.Copy(_contourTemp, _contourRaw, ContourSamples);
+            }
+
+            float k = Fill <= 0f ? 1f : 1f - Mathf.Exp(-shapeFollowRate * Time.deltaTime);
+            for (int i = 0; i < ContourSamples; i++)
+            {
+                float target = Mathf.Clamp(Mathf.Lerp(1f, _contourRaw[i], shapeFollow), 0.45f, 1.7f);
+                _contour[i] = Mathf.Lerp(_contour[i], target, k);
+            }
+        }
+
+        /// <summary>Distance from the loop's centre to its outline in a direction, or 0 if there is no hit.</summary>
+        float RayToLoop(Vector2 dir)
+        {
+            float best = float.PositiveInfinity;
+            for (int i = 0; i < _loop2D.Count; i++)
+            {
+                Vector2 a = _loop2D[i], e = _loop2D[(i + 1) % _loop2D.Count] - a;
+                float denom = dir.x * e.y - dir.y * e.x;
+                if (Mathf.Abs(denom) < 1e-8f) continue;
+                float t = (a.x * e.y - a.y * e.x) / denom;
+                float u = (a.x * dir.y - a.y * dir.x) / denom;
+                if (t > 0f && u >= 0f && u <= 1f && t < best) best = t;
+            }
+            return float.IsInfinity(best) ? 0f : best;
+        }
+
+        /// <summary>Where the bubble's rim sits in one of its sample directions, before any wobble.</summary>
+        public Vector3 RimPoint(int index)
+        {
+            BubbleRingVisual.Frame(Normal, RingAxis(), out Vector3 x, out Vector3 y);
+            float a = index / (float)ContourSamples * Mathf.PI * 2f;
+            return Center + (x * Mathf.Sin(a) + y * Mathf.Cos(a)) * (BubbleRadius * _contour[index % ContourSamples]);
+        }
+
         Vector2 Project(Vector3 p)
         {
             Vector3 d = p - Center;
@@ -236,7 +317,7 @@ namespace MiniPlanes
         }
 
         /// <summary>3D distance from a point to the nearest real finger of the loop (the open gap is skipped).</summary>
-        float DistanceToLoopFingers(Vector3 p)
+        public float DistanceToLoopFingers(Vector3 p)
         {
             float best = float.PositiveInfinity;
             for (int i = 0; i < _loop.Count; i++)
@@ -248,7 +329,9 @@ namespace MiniPlanes
             return best;
         }
 
-        static float DistancePointSegment(Vector3 p, Vector3 a, Vector3 b)
+        public float FingerBand => fingerRadius * Scale;
+
+        public static float DistancePointSegment(Vector3 p, Vector3 a, Vector3 b)
         {
             Vector3 ab = b - a;
             float len2 = ab.sqrMagnitude;
@@ -266,16 +349,19 @@ namespace MiniPlanes
                 float denom = _prevSigned - signed;
                 float t = Mathf.Abs(denom) > 1e-6f ? Mathf.Clamp01(_prevSigned / denom) : 0.5f;
                 Vector3 x = Vector3.Lerp(_prevPos, pos, t);
+                Vector2 q = Project(x);
+                bool inHole = q.magnitude < BubbleRadius || InsideLoop(q);
 
-                if (DistanceToLoopFingers(x) < fingerRadius * Scale + _plane.radius)
+                // Inside the hole only a real touch on a finger counts, so a close pass still scores.
+                if (DistanceToLoopFingers(x) < FingerBand + (inHole ? 0f : _plane.Radius))
                 {
                     PlaneHitRing?.Invoke(this);
                 }
-                else if (InsideLoop(Project(x)) && Time.time - _lastScoreTime > scoreCooldown)
+                else if (inHole && Time.time - _lastScoreTime > scoreCooldown)
                 {
                     _lastScoreTime = Time.time;
-                    _flashUntil = Time.time + scoredFlashSeconds;
-                    Scored?.Invoke(this);
+                    if (_visual != null) _visual.Flash(scoredFlashSeconds);
+                    Scored?.Invoke(this, x);
                 }
             }
 
@@ -291,66 +377,20 @@ namespace MiniPlanes
             if (!IsActive) return false;
             float s = Vector3.Dot(p - Center, Normal);
             if (Mathf.Abs(s) > zoneHalfDepth) return false;
-            if (InsideLoop(Project(p))) return true;
-            return DistanceToLoopFingers(p) < fingerRadius * Scale + zoneMargin;
+            Vector2 q = Project(p);
+            if (q.magnitude < BubbleRadius || InsideLoop(q)) return true;
+            return DistanceToLoopFingers(p) < FingerBand + zoneMargin;
         }
 
         void UpdateVisual()
         {
-            if (ringVisual == null) return;
-            if (!IsActive)
+            if (_visual == null) return;
+            if (MergedHidden || Fill <= 0f || !GameplayEnabled)
             {
-                ringVisual.enabled = false;
+                _visual.Hide();
                 return;
             }
-            ringVisual.enabled = true;
-            var t = ringVisual.transform;
-            t.position = Center;
-            t.rotation = Quaternion.LookRotation(Normal, Mathf.Abs(Vector3.Dot(Normal, Vector3.up)) > 0.95f ? Vector3.forward : Vector3.up);
-            t.localScale = Vector3.one * (Radius * visualRadiusScale);
-            bool flash = Time.time < _flashUntil && scoredMaterial != null;
-            var want = flash ? scoredMaterial : activeMaterial;
-            if (want != null && ringVisual.sharedMaterial != want) ringVisual.sharedMaterial = want;
-        }
-    }
-
-    /// <summary>Builds a torus in the XY plane with its axis along +Z (major radius 1).</summary>
-    public static class TorusMesh
-    {
-        public static Mesh Build(float minorRadius = 0.14f, int majorSegments = 36, int minorSegments = 10)
-        {
-            var verts = new List<Vector3>();
-            var norms = new List<Vector3>();
-            var tris = new List<int>();
-            for (int i = 0; i <= majorSegments; i++)
-            {
-                float u = i / (float)majorSegments * Mathf.PI * 2f;
-                Vector3 ringCentre = new Vector3(Mathf.Cos(u), Mathf.Sin(u), 0f);
-                for (int j = 0; j <= minorSegments; j++)
-                {
-                    float v = j / (float)minorSegments * Mathf.PI * 2f;
-                    Vector3 n = ringCentre * Mathf.Cos(v) + Vector3.forward * Mathf.Sin(v);
-                    verts.Add(ringCentre + n * minorRadius);
-                    norms.Add(n);
-                }
-            }
-            int stride = minorSegments + 1;
-            for (int i = 0; i < majorSegments; i++)
-            {
-                for (int j = 0; j < minorSegments; j++)
-                {
-                    int a = i * stride + j;
-                    int b = (i + 1) * stride + j;
-                    tris.Add(a); tris.Add(b); tris.Add(a + 1);
-                    tris.Add(b); tris.Add(b + 1); tris.Add(a + 1);
-                }
-            }
-            var mesh = new Mesh { name = "Torus" };
-            mesh.SetVertices(verts);
-            mesh.SetNormals(norms);
-            mesh.SetTriangles(tris, 0);
-            mesh.RecalculateBounds();
-            return mesh;
+            _visual.Show(Center, Normal, RingAxis(), BubbleRadius, Fill, 0f, _contour);
         }
     }
 }
