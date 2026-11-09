@@ -1,0 +1,68 @@
+{
+  "project": "MiniPlanes (Meta Quest 3 mixed reality)",
+  "staging_root": "Tools/Tripo/runs",
+  "output_root": "Assets/MiniPlanes/Art/Models",
+  "style": {
+    "prompt_suffix": "3D printed miniature toy, chunky soft rounded one-piece form, smooth matte polymer, extremely subtle layer lines, plain colours or an elegant gradient, no decals, no panel lines, single isolated object, no ground, no base plate",
+    "negative_base": "decals, stickers, text, logos, thin wires, ropes, realistic rivets, panel lines, metal, gloss, ground, base plate, stand"
+  },
+  "defaults": {
+    "model": "tripo-p2",
+    "texture_quality": "standard",
+    "static_chain": { "format": "FBX" }
+  },
+  "pricing": {
+    "note": "List price from tripo-cli 0.8.0 docs, 1 credit = 0.01 USD. API credits only; the Tripo website bills its own web credits and shows its own price.",
+    "generation": {
+      "tripo-p2": { "none": 100, "standard": 110, "detailed": 120, "extreme": 130 }
+    },
+    "convert_basic": 5
+  },
+  "assets": [
+    {
+      "id": "PlayerPlane",
+      "input_image": "Tools/Tripo/refs/PlayerPlane.png",
+      "prompt": "Rounded short-wing propeller trainer toy plane, fat body, broad rounded wings, big soft canopy dome, three paddle propeller blades, gradient from cream nose and propeller through seafoam to teal tail",
+      "negative_prompt": "",
+      "face_limit": 5000,
+      "target_size_m": 0.10,
+      "concept": "Docs/ArtBible/aircraft-studies.png, GRADIENT"
+    },
+    {
+      "id": "EnemyFighter",
+      "input_image": "Tools/Tripo/refs/EnemyFighter.png",
+      "prompt": "Enemy toy jet with broad swept wings, blunt rounded nose, soft canopy dome, tall swept tail fin, solid coral colour",
+      "negative_prompt": "",
+      "face_limit": 5000,
+      "target_size_m": 0.10,
+      "concept": "Docs/ArtBible/aircraft-studies.png, ENEMY"
+    },
+    {
+      "id": "EnemyBomber",
+      "input_image": "Tools/Tripo/refs/EnemyBomber.png",
+      "prompt": "Heavy wide twin-engine toy bomber plane, fat body, wide thick wings, two chunky round engine pods with stubby propellers, twin tail fins, blunt nose, darker coral to brick red colour",
+      "negative_prompt": "",
+      "face_limit": 5000,
+      "target_size_m": 0.13,
+      "concept": "No concept art. The reference is the Blender stand-in render."
+    },
+    {
+      "id": "BalloonShield",
+      "input_image": "Tools/Tripo/refs/BalloonShield.png",
+      "prompt": "Classic rounded hot air balloon toy with soft vertical gores and a small chunky basket on short thick struts, blue gradient pale at the top and deep at the bottom, subtle cream stripes",
+      "negative_prompt": "",
+      "face_limit": 5000,
+      "target_size_m": 0.12,
+      "concept": "No concept art. The reference is the Blender stand-in render."
+    },
+    {
+      "id": "BalloonBomb",
+      "input_image": "Tools/Tripo/refs/BalloonBomb.png",
+      "prompt": "Classic rounded hot air balloon toy with soft vertical gores, red at the top going to dark red at the bottom, carrying a chunky round dark bomb on short thick struts instead of a basket",
+      "negative_prompt": "",
+      "face_limit": 5000,
+      "target_size_m": 0.12,
+      "concept": "No concept art. The reference is the Blender stand-in render."
+    }
+  ]
+}
