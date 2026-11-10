@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9b6c07074e37c71448e96e365f19d72f, type: 3}
   m_Name: Level1
   m_EditorClassIdentifier: Assembly-CSharp::MiniPlanes.LevelConfig
-  defaultsVersion: 7
+  defaultsVersion: 9
   levelName: First Flight
   levelNumber: 1
   introCaption: 'Follow the faint line.
@@ -60,9 +60,40 @@ MonoBehaviour:
   balloonFollowSeconds: 1.6
   shieldGraceSeconds: 1
   turretBalloonInterval: 0
-  turretRange: 0.6
-  turretFireInterval: 0.5
-  turretShotSpeed: 1.1
+  maxShieldBalloons: -1
+  maxTurretBalloons: -1
+  turretDurationSeconds: 6
+  turretRange: 0.75
+  turretFireInterval: 0.12
+  turretShotSpeed: 1.6
+  turretHitRadius: 0.024
+  turretShotHomingDeg: 300
+  boosterTubeInterval: 0
+  maxBoosterTubes: -1
+  boosterTubeLifetime: 24
+  boostSpeedMultiplier: 1.7
+  boostSeconds: 3
+  islandCount: 0
+  islandMinSize: 0.06
+  islandMaxSize: 0.12
+  islandPathClearance: 0.06
+  bossLevel: 0
+  bossMissiles: 0
+  bossTrails: 4
+  bossTrailRounds: 6
+  bossRoundSpacing: 0.14
+  bossBarrageSeconds: 5
+  bossBulletSpeed: 0.75
+  bossAimSpreadDeg: 14
+  bossFighterBatch: 2
+  bossMissileCount: 1
+  bossRestSeconds: 3
+  missileSpeed: 0.28
+  missileTurnRateDeg: 70
+  missileHoldSeconds: 1.5
+  missileSmackSpeed: 0.9
+  missileBlastRadius: 0.14
+  missileLifetime: 16
   maxBombers: 0
   bomberSpawnInterval: 14
   bomberSpeed: 0.3

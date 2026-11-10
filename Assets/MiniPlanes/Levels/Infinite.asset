@@ -27,8 +27,19 @@ MonoBehaviour:
   startTurnRadius: 0.13
   capTurnRadius: 0.08
   loopsFromWave: 4
-  fuelFromWave: 2
+  fuelFromWave: 1
   balloonsFromWave: 3
+  shieldInterval: 14
+  maxShieldsPerWave: 2
+  turretEveryWaves: 3
+  tubesFromWave: 1
+  maxTubesPerWave: 3
+  islandsFromWave: 4
+  startIslands: 3
+  capIslands: 8
+  bossEvery: 5
+  bossMissilesFrom: 2
+  bossWaveDurationSeconds: 48
   fightersFromWave: 2
   capFighters: 3
   startFighterInterval: 11

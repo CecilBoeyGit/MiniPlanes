@@ -5,7 +5,10 @@ namespace MiniPlanes
     /// <summary>Saved progress: level unlocks, the Infinite high score, coins, owned planes and paint.</summary>
     public static class Progression
     {
-        public const int TutorialLevelCount = 6;
+        /// <summary>Tutorial levels in the list, the zeppelin level included.</summary>
+        public const int TutorialLevelCount = 7;
+        /// <summary>Levels to pass for Infinite. The zeppelin level after them is optional.</summary>
+        public const int LevelsForInfinite = 6;
 
         const string UnlockedKey = "miniplanes.unlocked";
         const string HighScoreKey = "miniplanes.highscore";
@@ -35,7 +38,7 @@ namespace MiniPlanes
             get
             {
                 if (UnlockAllOverride) return true;
-                return PlayerPrefs.GetInt(UnlockedKey, 1) > TutorialLevelCount;
+                return PlayerPrefs.GetInt(UnlockedKey, 1) > LevelsForInfinite;
             }
         }
 
@@ -44,6 +47,12 @@ namespace MiniPlanes
         public static bool IsLevelUnlocked(int zeroBasedLevel)
         {
             return zeroBasedLevel < UnlockedLevels;
+        }
+
+        /// <summary>Whether this tutorial level has ever been passed. Ignores the playtest override.</summary>
+        public static bool HasPassed(int zeroBasedLevel)
+        {
+            return PlayerPrefs.GetInt(UnlockedKey, 1) > zeroBasedLevel + 1;
         }
 
         /// <summary>Records a pass of a tutorial level, unlocking the next level or Infinite.</summary>

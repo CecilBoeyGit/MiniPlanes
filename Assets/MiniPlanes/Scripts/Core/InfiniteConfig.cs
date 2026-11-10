@@ -40,8 +40,31 @@ namespace MiniPlanes
         public int loopsFromWave = 4;
 
         [Header("Fuel and balloons")]
-        public int fuelFromWave = 2;
+        public int fuelFromWave = 1;
         public int balloonsFromWave = 3;
+
+        [Header("Powerup balloons")]
+        [Tooltip("Average seconds between blue shield balloons in a wave.")]
+        public float shieldInterval = 14f;
+        public int maxShieldsPerWave = 2;
+        [Tooltip("The gold turret balloon is rare: one, on every this many waves.")]
+        public int turretEveryWaves = 3;
+
+        [Header("Booster tubes (waves 1-2: 1, waves 3-5: 2, then this many)")]
+        public int tubesFromWave = 1;
+        public int maxTubesPerWave = 3;
+
+        [Header("Floating islands")]
+        public int islandsFromWave = 4;
+        public int startIslands = 3;
+        public int capIslands = 8;
+
+        [Header("Zeppelin boss waves")]
+        [Tooltip("Every this many waves is a boss wave: 5 makes waves 5, 10, 15 and so on.")]
+        public int bossEvery = 5;
+        [Tooltip("The boss's missiles start from this boss on. 2 means the second boss wave.")]
+        public int bossMissilesFrom = 2;
+        public float bossWaveDurationSeconds = 48f;
 
         [Header("Fighters")]
         public int fightersFromWave = 2;
@@ -82,7 +105,11 @@ namespace MiniPlanes
             level.turnRadius = Mathf.Lerp(startTurnRadius, capTurnRadius, t);
             level.allowLoops = wave >= loopsFromWave;
             level.useBalloons = wave >= balloonsFromWave;
-            level.turretBalloonInterval = wave >= balloonsFromWave ? 20f : 0f;
+            level.shieldBalloonInterval = shieldInterval;
+            level.maxShieldBalloons = maxShieldsPerWave;
+            bool turretWave = level.useBalloons && turretEveryWaves > 0 && wave % turretEveryWaves == 0;
+            level.maxTurretBalloons = turretWave ? 1 : 0;
+            level.turretBalloonInterval = turretWave ? waveDurationSeconds * 0.5f : 0f;
 
             level.maxFighters = wave < fightersFromWave
                 ? 0
@@ -95,6 +122,42 @@ namespace MiniPlanes
                 ? 0
                 : Mathf.Clamp(1 + Mathf.FloorToInt(t * (capBombers - 1) * 1.2f), 1, capBombers);
             level.bomberSpawnInterval = Mathf.Lerp(startBomberInterval, capBomberInterval, t);
+
+            level.islandCount = wave < islandsFromWave
+                ? 0
+                : Mathf.Min(capIslands, startIslands + (wave - islandsFromWave) / 2);
+
+            int boss = BossNumber(wave);
+            level.SetBoss(boss, boss >= bossMissilesFrom);
+            if (boss > 0)
+            {
+                // The zeppelin brings its own fighters; nothing else attacks on a boss wave.
+                level.levelName = "Boss wave " + wave;
+                level.pathDurationSeconds = bossWaveDurationSeconds;
+                level.maxFighters = 0;
+                level.maxBombers = 0;
+            }
+
+            // Tubes are spread evenly through the wave, so the cap is reached but never crowded.
+            int tubes = TubesForWave(wave);
+            level.maxBoosterTubes = tubes;
+            level.boosterTubeInterval = tubes > 0 ? level.pathDurationSeconds / (tubes + 0.5f) : 0f;
+        }
+
+        /// <summary>Booster tubes in a wave: 1 in waves 1 and 2, 2 in waves 3 to 5, then the cap.</summary>
+        public int TubesForWave(int wave)
+        {
+            if (wave < tubesFromWave) return 0;
+            if (wave <= 2) return Mathf.Min(1, maxTubesPerWave);
+            if (wave <= 5) return Mathf.Min(2, maxTubesPerWave);
+            return maxTubesPerWave;
+        }
+
+        /// <summary>0 for a normal wave, otherwise which boss wave this is: 1 for the first.</summary>
+        public int BossNumber(int wave)
+        {
+            if (bossEvery <= 0 || wave <= 0 || wave % bossEvery != 0) return 0;
+            return wave / bossEvery;
         }
 
         public static InfiniteConfig CreateDefault()

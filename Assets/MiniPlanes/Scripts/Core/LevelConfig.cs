@@ -17,7 +17,7 @@ namespace MiniPlanes
     [CreateAssetMenu(fileName = "Level", menuName = "MiniPlanes/Level Config")]
     public class LevelConfig : ScriptableObject
     {
-        public const int CurrentDefaultsVersion = 7;
+        public const int CurrentDefaultsVersion = 9;
         [HideInInspector] public int defaultsVersion;
 
         [Header("Identity")]
@@ -106,13 +106,71 @@ namespace MiniPlanes
         public float shieldGraceSeconds = 1f;
         [Tooltip("Average seconds between gold turret balloons. 0 turns them off.")]
         public float turretBalloonInterval = 0f;
+        [Tooltip("Most blue balloons in one flight. -1 means no limit.")]
+        public int maxShieldBalloons = -1;
+        [Tooltip("Most gold balloons in one flight. -1 means no limit.")]
+        public int maxTurretBalloons = -1;
 
-        [Header("Turret (from the gold balloon, lasts the rest of the flight)")]
+        [Header("Turret (from the gold balloon, or the Bluebird's own)")]
+        [Tooltip("How long a fitted turret lasts, in seconds.")]
+        public float turretDurationSeconds = 6f;
         [Tooltip("The turret fires at enemies closer than this to the plane, in metres.")]
-        public float turretRange = 0.6f;
+        public float turretRange = 0.75f;
         [Tooltip("Seconds between turret shots.")]
-        public float turretFireInterval = 0.5f;
-        public float turretShotSpeed = 1.1f;
+        public float turretFireInterval = 0.12f;
+        public float turretShotSpeed = 1.6f;
+        [Tooltip("A turret round downs an enemy whose centre passes within this distance, in metres.")]
+        public float turretHitRadius = 0.024f;
+        [Tooltip("How hard a round curves toward its target, in degrees per second.")]
+        public float turretShotHomingDeg = 300f;
+
+        [Header("Booster tubes")]
+        [Tooltip("Average seconds between booster tubes. 0 turns them off.")]
+        public float boosterTubeInterval = 0f;
+        [Tooltip("Most booster tubes in one flight. -1 means no limit.")]
+        public int maxBoosterTubes = -1;
+        [Tooltip("Seconds a booster tube lasts. Holding it keeps it.")]
+        public float boosterTubeLifetime = 24f;
+        [Tooltip("Speed multiplier after flying cleanly through a tube.")]
+        public float boostSpeedMultiplier = 1.7f;
+        public float boostSeconds = 3f;
+
+        [Header("Floating islands")]
+        [Tooltip("Islands floating around the path. 0 turns them off.")]
+        public int islandCount = 0;
+        public float islandMinSize = 0.06f;
+        public float islandMaxSize = 0.12f;
+        [Tooltip("Gap kept between an island and the flight path, in metres.")]
+        public float islandPathClearance = 0.06f;
+
+        [Header("Zeppelin boss")]
+        [Tooltip("0 means no boss. 1 is the first, gentlest zeppelin; higher numbers are tougher.")]
+        public int bossLevel = 0;
+        [Tooltip("Whether the zeppelin fires tracking missiles.")]
+        public bool bossMissiles = false;
+        [Tooltip("Bullet trails in each barrage.")]
+        public int bossTrails = 4;
+        [Tooltip("Rounds in each trail.")]
+        public int bossTrailRounds = 6;
+        public float bossRoundSpacing = 0.14f;
+        public float bossBarrageSeconds = 5f;
+        public float bossBulletSpeed = 0.75f;
+        [Tooltip("How far aimed trails may be off a perfect shot, in degrees. The first trail of a barrage is always dead on; one wanders.")]
+        public float bossAimSpreadDeg = 14f;
+        [Tooltip("Fighters launched from the zeppelin's decks at a time.")]
+        public int bossFighterBatch = 2;
+        public int bossMissileCount = 1;
+        [Tooltip("Pause between the zeppelin's attacks, in seconds.")]
+        public float bossRestSeconds = 3f;
+        public float missileSpeed = 0.28f;
+        public float missileTurnRateDeg = 70f;
+        [Tooltip("How long a palm must hold a missile to make it drop, in seconds.")]
+        public float missileHoldSeconds = 1.5f;
+        [Tooltip("A hand moving faster than this sets a missile off instead of holding it, in metres per second.")]
+        public float missileSmackSpeed = 0.9f;
+        [Tooltip("The plane within this distance of a missile blast takes damage, in metres.")]
+        public float missileBlastRadius = 0.14f;
+        public float missileLifetime = 16f;
 
         [Header("Bombers (level 2 enemies)")]
         public int maxBombers = 0;
@@ -142,7 +200,30 @@ namespace MiniPlanes
         /// <summary>The fuel one ring pass adds.</summary>
         public float FuelPerRing => fuelMax / Mathf.Max(1, ringsToFillTank);
 
-        /// <summary>Fills in the shipped tuning for a tutorial level, 1 to 6.</summary>
+        /// <summary>
+        /// Sets the zeppelin's tuning for a boss of the given strength: 1 is the first boss. Each step adds
+        /// trails, rounds, fighters and missiles, up to caps.
+        /// </summary>
+        public void SetBoss(int strength, bool missiles)
+        {
+            bossLevel = Mathf.Max(0, strength);
+            bossMissiles = missiles;
+            if (bossLevel == 0) return;
+            int k = bossLevel;
+            bossTrails = Mathf.Min(3 + k, 8);
+            bossTrailRounds = Mathf.Min(5 + k, 10);
+            bossRoundSpacing = Mathf.Max(0.09f, 0.15f - 0.01f * k);
+            bossBarrageSeconds = 5f;
+            bossBulletSpeed = Mathf.Min(0.7f + 0.05f * k, 1f);
+            bossAimSpreadDeg = Mathf.Max(1f, 3f - 0.5f * k);
+            bossFighterBatch = Mathf.Min(1 + k, 4);
+            bossMissileCount = Mathf.Clamp(k - 1, 1, 3);
+            bossRestSeconds = Mathf.Max(1.4f, 3.2f - 0.3f * k);
+            missileSpeed = Mathf.Min(0.26f + 0.02f * k, 0.38f);
+            missileTurnRateDeg = Mathf.Min(60f + 8f * k, 110f);
+        }
+
+        /// <summary>Fills in the shipped tuning for a tutorial level, 1 to 7.</summary>
         public void ApplyDefaults(int level)
         {
             defaultsVersion = CurrentDefaultsVersion;
@@ -203,7 +284,7 @@ namespace MiniPlanes
                     break;
                 case 5:
                     levelName = "Fair Winds";
-                    introCaption = "Pinch a balloon's crosshair and drag it onto the flight path.\nBlue shields your plane from one hit. Gold fits a turret that shoots enemies.";
+                    introCaption = "Pinch a powerup and drag it onto the flight path.\nBlue shields one hit, gold fits a turret. Line a tube up with the path for a speed boost.";
                     requiredRingPasses = 3;
                     hitsToCrash = 1;
                     planeSpeed = 0.3f;
@@ -217,6 +298,22 @@ namespace MiniPlanes
                     fighterSpawnInterval = 11f;
                     useBalloons = true;
                     turretBalloonInterval = 18f;
+                    boosterTubeInterval = 12f;
+                    break;
+                case 7:
+                    levelName = "Zeppelin";
+                    introCaption = "A giant zeppelin attacks from afar. It can't be destroyed.\nBlock its bullets, flick its fighters, and hold a missile in your palm until it drops.";
+                    requiredRingPasses = 2;
+                    hitsToCrash = 2;
+                    planeSpeed = 0.26f;
+                    pathDurationSeconds = 55f;
+                    frontArcDeg = 120f;
+                    randomness = 0.12f;
+                    turnRadius = 0.135f;
+                    revealMode = PathRevealMode.AlwaysVisible;
+                    useBalloons = true;
+                    shieldBalloonInterval = 14f;
+                    SetBoss(1, true);
                     break;
                 default:
                     levelName = "Bomb Run";
