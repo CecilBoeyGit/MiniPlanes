@@ -9,22 +9,39 @@ fingers. The plane scores by flying through it from either side. Your hands are 
 a hit. Each tutorial level and each Infinite run has 3 lives; after a crash the plane comes back where it fell.
 To pause, face a palm toward you and press the Menu button on that wrist with your other hand. Six tutorial
 levels introduce the mechanics one at a time, each opening on a page with a Start button, and passing them
-all opens the endless Infinite mode. Coins earned in play buy new planes and paint in the Hangar.
+all opens the endless Infinite mode and a seventh level for playtesting the zeppelin boss. Coins earned in
+Infinite buy new planes and paint in the Hangar.
 
 ## Scoring
 
-| Action | Points | Coins |
+| Action | Points | Coins (Infinite only) |
 |---|---|---|
 | Plane through a single-hand C ring | 2 | 2 |
 | Plane through the big two-hand O ring | 1 (it is larger and easier) | 1 |
 | Flicking a fighter out of the sky | 2 | 1 |
 | Flicking a bomber out of the sky | 4 | 1 |
 | The turret shooting an enemy down | 1 | 1 |
-| Cupping a flashing bomb balloon until it is contained | - | 2 |
+| Holding a zeppelin missile until it drops | 2 | 1 |
+| Cupping a flashing bomb balloon until it is contained | - | 5 |
 | Surviving an Infinite wave | - | 5 |
 
 Points are the score for a level or run; coins are saved and spent in the Hangar (Bluebird 500, Pusher
-Racer 1000). All of them are on the `Game` object (`GameManager`), except wave coins on `Infinite.asset`.
+Racer 1000). Tutorial levels pay no coins for play, so they can't be farmed; instead each pays 5 coins the
+first time it is passed, and nothing on replays. All of these are on the `Game` object (`GameManager`),
+except wave coins on `Infinite.asset`.
+
+## Powerups and planes
+
+- **Blue balloon**: a one-hit shield. **Gold balloon**: an automatic turret for 6 seconds that aims ahead of
+  its targets and fires fast. Pinch a balloon's crosshair and drag it onto the path.
+- **Booster tubes**: glass tubes about as wide as a C ring, straight or curved, short or long. Pinch one and
+  it moves and turns with your hand, like a real object. Line it up where you remember the path goes: flying
+  in one end and out the other boosts the plane for 3 seconds and uses the tube up. The plane touching the wall,
+  or a hand knocking into the tube, breaks it with no boost.
+- **In Infinite** at most 2 blue balloons come per wave, the gold turret balloon only once every third wave, and
+  booster tubes are capped: 1 in waves 1 and 2, 2 in waves 3 to 5, then 3. Fuel is on from wave 1.
+- **Bluebird** (500): fits its own turret, the same as the gold balloon's, when the first enemy plane of
+  each wave shows up. **Pusher Racer** (1000): boosts for 3 seconds at the start of every wave.
 
 ## Levels
 
@@ -36,7 +53,21 @@ Racer 1000). All of them are on the `Game` object (`GameManager`), except wave c
 | 4 | Bandits | Fighters with machine guns; block bullets, flick fighters | as level 2 | 1 hit |
 | 5 | Fair Winds | Draggable balloons: blue shield, gold turret | as level 2 | 1 hit |
 | 6 | Bomb Run | Bombers drop red bomb balloons, then fly off | as level 2 | 1 hit |
+| 7 | Zeppelin | The boss, with every attack, for playtesting | On the whole level | 2 hits |
 | - | Infinite | Waves, high score | 3 s per wave | 1 hit |
+
+Level 5 also hands out booster tubes. Level 7 opens with Infinite, after level 6, and Infinite doesn't need it.
+
+In Infinite, **floating islands** appear from wave 4 around you and the path, never on it. The plane
+crashes into them. Touching one with a hand shatters it into shards that drift slowly in every direction,
+across the path too; a shard hitting the plane also crashes it, and touching a shard turns it to dust.
+
+Every 5th wave is a **boss wave**: a giant zeppelin hangs in the distance and can't be destroyed. It takes
+turns at bullet trails, mostly aimed at the plane (block them with your hands), batches of fighters launched
+from its decks, and large tracking missiles. Its aimed trails lead the plane along its path and re-aim every
+round, so they follow it; one trail per barrage is dead on. Hold a missile with an open palm for 1.5 seconds and it drops
+out of the sky; smacking it sets it off, which is only safe far from the plane. The first boss wave has no
+missiles; each later one adds trails, fighters and missiles.
 
 Every level has 3 lives (`lives`). Hits are per life: a low-risk level absorbs a few before one crash.
 
@@ -47,11 +78,13 @@ only ever shows the part of the path still ahead of the plane.
 
 Everything gameplay-related is exposed in the Inspector:
 
-- **`Assets/MiniPlanes/Levels/Level1..6.asset`**: speed, path length and shape, the arc in front of the
+- **`Assets/MiniPlanes/Levels/Level1..7.asset`**: speed, path length and shape, the arc in front of the
   player, line preview timings (`startRevealSeconds`, `streakToReveal`, `streakRevealSeconds`), fuel
-  (`fuelDrainPerSecond`, `ringsToFillTank`), fighters, balloons and bombers.
+  (`fuelDrainPerSecond`, `ringsToFillTank`), fighters, balloons, turret (`turretDurationSeconds`,
+  `turretFireInterval`, `turretHitRadius`), booster tubes and boost, islands, bombers, and the zeppelin
+  (`bossLevel` and the `boss...` and `missile...` values, such as `missileHoldSeconds`).
 - **`Assets/MiniPlanes/Levels/Infinite.asset`**: start values and hard caps for the wave curve, and
-  `rampWaves` for how quickly it ramps.
+  `rampWaves` for how quickly it ramps; when tubes and islands start; `bossEvery` and `bossMissilesFrom`.
 - **`HandRing`** on each hand: C detection, fill time, `visualRadiusScale` (the bubble's size), `shapeFollow`
   (how closely it follows the fingers). **`RingMerger`** on `Game/RingMerger`: how close
   the hands must be to merge, merge time, big ring size. **`BubbleRingVisual`**: wobble and float.
@@ -59,8 +92,8 @@ Everything gameplay-related is exposed in the Inspector:
 - **`CurvedHud`** on `CockpitHUD`: placement, follow speed, layout, colours.
 - **`WristMenuButton`** on `WristMenu`: how directly the palm must face you, button size and placement.
   **`PausePanel`** on `PausePanel`: reach, follow speed, button layout, poke depth.
-- **`Assets/MiniPlanes/Levels/Planes.asset`**: the Hangar's planes, prices, paint palettes and where the
-  turret mounts on each.
+- **`Assets/MiniPlanes/Levels/Planes.asset`**: the Hangar's planes, prices, perks, paint palettes and where
+  the turret mounts on each.
 - **`GameManager`**: points and coins per action; `devUnlockAll` opens every level and `devUnlockAllPlanes`
   every plane, without saving anything; `devCoinsOnStart` tops up the coins; `devResetProgressOnStart` wipes
   saved progress. All are off in shipped settings.
@@ -102,7 +135,8 @@ Unity.exe -batchmode -nographics -buildTarget Android -projectPath D:/Unity/Mini
 
 `MiniPlanes > 4. Run Autopilot Checks` plays the real scene with simulated hands at a fixed timestep and
 checks each mechanic: path limits, unlocks, poking the menu, ring scoring, the O merge, fuel rates,
-bullets, flicks, balloons, bomb arming, chaining, covering and Infinite's waves. Results are logged as
+bullets, flicks, balloons, the turret, plane perks, booster tubes, islands, bomb arming, chaining, covering,
+coins, Infinite's waves and the zeppelin. Results are logged as
 `[AUTOPILOT] PASS` or `FAIL`. Headless, leave out `-quit`, and the exit code is 0 only if all pass:
 
 ```
@@ -110,7 +144,7 @@ Unity.exe -batchmode -nographics -buildTarget Android -projectPath D:/Unity/Mini
 ```
 
 Add `-mpShotsDir <folder>` and drop `-nographics` to render preview PNGs of the menus, models, rings,
-HUD, Hangar, stencil reveal and comic VFX instead.
+HUD, Hangar, stencil reveal, comic VFX, booster tubes, islands and the zeppelin instead.
 
 ## How it works
 
@@ -122,16 +156,20 @@ HUD, Hangar, stencil reveal and comic VFX instead.
 | `Core/CatmullRomPath.cs` | Arc-length spline, so the plane flies at constant speed. |
 | `Core/PathRevealer.cs` | The faint line, ahead of the plane only: always on, timed, or brought back by a ring streak. |
 | `Core/MiniPlane.cs` | Flight, fuel, shield, turret, hits, crash and respawn, plane model and paint. |
-| `Core/PlaneTurret.cs` | The gold balloon's automatic turret and its rounds. |
-| `Core/PlaneCatalog.cs`, `PlanePaint.cs` | The Hangar's planes and palettes, and applying paint. |
+| `Core/PlaneTurret.cs` | The automatic turret: intercept aiming, homing rounds, 6 s life. |
+| `Core/PlaneCatalog.cs`, `PlanePaint.cs` | The Hangar's planes, perks and palettes, and applying paint. |
 | `Core/ComicVfx.cs` | Pooled hand-drawn effects: onset, peak, breakup frames. |
 | `Core/Progression.cs` | Saved unlocks, high score, coins, owned planes and paint. |
 | `Core/GameArt.cs` | References to all materials, models, sprites and fonts. |
 | `Hands/HandSource.cs`, `MetaHandSource.cs`, `FakeHandSource.cs` | Hand input: abstract, Meta, simulated. |
 | `Hands/HandRing.cs`, `BubbleRingVisual.cs`, `RingMerger.cs` | C detection, bubble portal, big O merge. |
-| `Hands/HandHazard.cs`, `FlickDetector.cs`, `BalloonGrabber.cs` | Rock hands, flicks, pinch-drag. |
+| `Hands/HandHazard.cs`, `FlickDetector.cs`, `BalloonGrabber.cs` | Rock hands, flicks, pinch-drag and tube holding. |
+| `Hands/HandMotion.cs` | Shared hand speed, to tell a gentle hold from a smack. |
 | `Enemies/EnemyPlane.cs`, `BomberPlane.cs`, `Projectile.cs` | Fighters, bombers, machine-gun rounds. |
 | `Enemies/PowerBalloon.cs`, `BombBalloon.cs`, `EnemySpawner.cs` | Balloons and spawning. |
+| `Enemies/BoosterTube.cs` | Booster tubes: their shapes, holding, and the clean-pass test. |
+| `Enemies/Zeppelin.cs`, `BossMissile.cs` | The boss and its attacks; palm-held missiles. |
+| `World/FloatingIslands.cs` | Infinite's islands, their shards and dust. |
 | `UI/CurvedCanvas.cs`, `CurvedGraphic.cs`, `LazyFollow.cs` | Bending uGUI onto a cylinder; smooth follow. |
 | `UI/PokeCanvas.cs`, `PokeButton.cs`, `PokeScrollArea.cs` | Fingertip input for any canvas. |
 | `UI/CurvedHud.cs`, `UI/MenuPanel.cs` | The HUD, and the menu with its intro, result and Hangar pages. |
@@ -139,7 +177,7 @@ HUD, Hangar, stencil reveal and comic VFX instead.
 
 Shaders in `Assets/MiniPlanes/Shaders`: `Matte` (printed polymer), `BubbleRing` (radial fill, wobble,
 peanut merge, finger-shaped outline), `OccludedSilhouette` (solid plane reveal behind hands), `PathLine`,
-`ComicSprite`, `ShieldBubble`. `Matte` can also repaint a model's colourful parts, which the Hangar palettes
+`ComicSprite`, `ShieldBubble` (also the tubes' glass), `Trail` (the boost streak). `Matte` can also repaint a model's colourful parts, which the Hangar palettes
 and the gold balloon use.
 
 The behind-the-hand reveal works in three steps. The hand material writes stencil 1. Aircraft clear it
@@ -150,8 +188,8 @@ stencil still says that depth belongs to a hand.
 
 Style references are in `Docs/ArtBible`, from the Codex art bible session. VFX cuts and fonts are in
 `Assets/MiniPlanes/Art`. The models were generated on the Tripo website and baked to about 5,000 triangles: the
-three player planes, two enemies and the turret come from the reference sheets in `Docs/ArtBible` and use a
-small texture; the balloons use vertex colours. The gold turret balloon is the blue one repainted in game.
+three player planes, two enemies, the turret and the zeppelin come from the reference sheets in `Docs/ArtBible`
+and use a small texture; the balloons use vertex colours. Islands, tubes and missiles are built in code. The gold turret balloon is the blue one repainted in game.
 `Tools/Tripo/web_generations.md` records the prompts, task IDs and how to rebuild them.
 The original Blender versions are kept in `Tools/Art/standins`.
 
