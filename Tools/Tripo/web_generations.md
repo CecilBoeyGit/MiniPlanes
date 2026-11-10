@@ -4,10 +4,12 @@ These are the models now in `Assets/MiniPlanes/Art/Models`. They were made on st
 HD Model, H3.1, 55 credits each. Exports are free. The API route has its own separate balance.
 
 Image-to-3D keeps the facing of the source picture, so the rotation that puts the nose at -Y differs per model. Check the
-top view in the preview. On the website, wait for the file to reach Downloads before closing the Export dialog.
+top view in the preview. On the website, wait for the file to reach Downloads before closing the Export dialog. If the browser never saves it, the
+Export button is only a link to a signed `tripo-data...tripo3d.com/.../tripo_convert_<id>.glb` URL, which curl can fetch.
 
 Total spent on 2026-11-03: 660 credits for 12 generations, including 3 rejected attempts. Balance went from 66,866 to 66,206.
 On 2026-11-09: 165 credits for the Turret, Biplane and Pusher Racer (image-to-3D from Docs/ArtBible). The gold turret balloon is the blue one repainted in game, not a model.
+Later that day the Zeppelin (image-to-3D from `refs/v2/EnemyZeppelin.png`, a crop of `Docs/ArtBible/enemy-zeppelin-concept.png`) cost nothing: the account's one-time 8K Texture trial made it free.
 
 The three aircraft are image-to-3D, from the hero view of the Codex reference sheets in `Docs/ArtBible/*-model-reference.png`, cropped to `Tools/Tripo/refs/v2`. The balloons are still text-to-3D, from the prompts below. These aircraft raw files are `model_v2.glb`, and they bake to a 512 px texture because vertex colours smear the wing stripes.
 
@@ -19,6 +21,7 @@ The three aircraft are image-to-3D, from the hero view of the Codex reference sh
 | PlayerBiplane | c476f544-e426-4f4d-ba6b-772d582aca6c | `--rotate 0 0 0 --cut-front 0.12 --propeller --prop-span 0.42 --texture 512 --smooth 8` |
 | PlayerPusher | f87edfc0-2e3b-4b7f-ae0d-1f4ed5d08f7d | `--rotate 0 0 180 --texture 512 --smooth 8` (rear propeller stays part of the body) |
 | Turret | 3c9873e4-9fa8-4abc-9909-b0ab4544929f | `--rotate 0 0 -90 --texture 256 --max-tris 2500 --smooth 6` |
+| EnemyZeppelin | f4d23ed5-769d-470f-9f98-aed5090979c0 | `--rotate 0 0 0 --texture 1024 --max-tris 6000 --smooth 6` (exported at 2K) |
 | BalloonShield | c4560afe-4dbd-4952-9160-0baa6f49499b | `--max-tris 4500 --smooth 8` |
 | BalloonBomb | ed239993-4252-412c-8990-5cfc71366036 | `--max-tris 4500 --smooth 8` |
 
