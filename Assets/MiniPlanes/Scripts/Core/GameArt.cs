@@ -18,6 +18,8 @@ namespace MiniPlanes
         public Material fighterMatte;
         public Material bomberMatte;
         public Material turretMatte;
+        [Tooltip("The zeppelin's own textured material.")]
+        public Material zeppelinMatte;
         public Material handRock;
         public Material silhouette;
         public Material bubbleRing;
@@ -27,6 +29,12 @@ namespace MiniPlanes
         public Material projectile;
         [Tooltip("The turret's bullets.")]
         public Material turretShot;
+        [Tooltip("The zeppelin's bullets.")]
+        public Material bossBullet;
+        [Tooltip("The streak behind a boosting plane.")]
+        public Material boostTrail;
+        [Tooltip("The see-through wall of a booster tube.")]
+        public Material tubeGlass;
 
         [Header("Models")]
         public GameObject playerPlane;
@@ -38,6 +46,8 @@ namespace MiniPlanes
         public GameObject balloonTurret;
         [Tooltip("The turret fitted to the plane.")]
         public GameObject turret;
+        [Tooltip("The boss airship. Empty builds a simple stand-in from shapes.")]
+        public GameObject zeppelin;
 
         [Header("World UI prefabs (edit these to restyle)")]
         [Tooltip("Floats above the blue shield balloon.")]
@@ -72,12 +82,13 @@ namespace MiniPlanes
         public Material FighterMaterial => fighterMatte != null ? fighterMatte : planeMatte;
         public Material BomberMaterial => bomberMatte != null ? bomberMatte : planeMatte;
         public Material TurretMaterial => turretMatte != null ? turretMatte : planeMatte;
+        public Material ZeppelinMaterial => zeppelinMatte != null ? zeppelinMatte : planeMatte;
     }
 
     /// <summary>Attaches a normalised model under a parent. Shared by the plane, enemies and balloons.</summary>
     public static class ModelUtil
     {
-        public enum FitAxis { Width, Height }
+        public enum FitAxis { Width, Height, Length }
 
         static readonly int UseVertexColorId = Shader.PropertyToID("_UseVertexColor");
 
@@ -91,7 +102,7 @@ namespace MiniPlanes
             go.transform.localScale = Vector3.one;
 
             Bounds bounds = MeasureInParent(go.transform, parent);
-            float measured = axis == FitAxis.Width ? bounds.size.x : bounds.size.y;
+            float measured = axis == FitAxis.Width ? bounds.size.x : axis == FitAxis.Height ? bounds.size.y : bounds.size.z;
             float scale = measured > 1e-6f ? size / measured : 1f;
             go.transform.localScale = Vector3.one * scale;
             go.transform.localPosition = -bounds.center * scale;
@@ -130,6 +141,28 @@ namespace MiniPlanes
                 }
             }
             return result;
+        }
+
+        /// <summary>A primitive shape with a flat colour, for stand-ins and simple props. No collider.</summary>
+        public static GameObject Primitive(PrimitiveType type, Transform parent, Vector3 localPosition, Vector3 localScale,
+            Quaternion localRotation, Material material, Color color)
+        {
+            var go = GameObject.CreatePrimitive(type);
+            var col = go.GetComponent<Collider>();
+            if (col != null) Object.Destroy(col);
+            go.transform.SetParent(parent, false);
+            go.transform.localPosition = localPosition;
+            go.transform.localRotation = localRotation;
+            go.transform.localScale = localScale;
+            var r = go.GetComponent<MeshRenderer>();
+            if (material != null) r.sharedMaterial = material;
+            r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            r.receiveShadows = false;
+            var block = new MaterialPropertyBlock();
+            block.SetFloat(UseVertexColorId, 0f);
+            block.SetColor("_BaseColor", color);
+            r.SetPropertyBlock(block);
+            return go;
         }
 
         /// <summary>A flat single-mesh fallback when no model asset exists.</summary>

@@ -203,6 +203,24 @@ namespace MiniPlanes.Editor
             Fill(cat, "skipper", "PlayerPlane", art.playerMatte);
             Fill(cat, "biplane", "PlayerBiplane", TexturedMatte("BiplaneMatte", "PlayerBiplane"));
             Fill(cat, "pusher", "PlayerPusher", TexturedMatte("PusherMatte", "PlayerPusher"));
+            if (cat.version < 3)
+            {
+                // Perks arrived after the catalog: give the starter planes theirs once, then leave them to you.
+                foreach (var p in cat.planes)
+                {
+                    if (p.id == "biplane")
+                    {
+                        p.perk = PlanePerk.WaveTurret;
+                        p.description = "Fits its own turret when each wave's first enemy shows up.";
+                    }
+                    else if (p.id == "pusher")
+                    {
+                        p.perk = PlanePerk.WaveBoost;
+                        p.description = "Boosts for 3 seconds at the start of every wave.";
+                    }
+                }
+                cat.version = 3;
+            }
             EditorUtility.SetDirty(cat);
             return cat;
         }
@@ -281,9 +299,15 @@ namespace MiniPlanes.Editor
             art.fighterMatte = TexturedMatte("FighterMatte", "EnemyFighter");
             art.bomberMatte = TexturedMatte("BomberMatte", "EnemyBomber");
             art.turretMatte = TexturedMatte("TurretMatte", "Turret");
+            art.zeppelinMatte = TexturedMatte("ZeppelinMatte", "EnemyZeppelin");
             art.turretShot = Matte("TurretShot", new Color(1f, 0.72f, 0.16f, 1f), false, 0, StencilOp.Replace, 2000, 0f);
             art.handRock = Matte("HandRock", new Color(0.62f, 0.6f, 0.57f, 1f), false, 1, StencilOp.Replace, 1990, 0.05f);
             art.projectile = Matte("Projectile", new Color(1f, 0.82f, 0.3f, 1f), false, 0, StencilOp.Replace, 2000, 0f);
+            art.bossBullet = Matte("BossBullet", new Color(1f, 0.42f, 0.3f, 1f), false, 0, StencilOp.Replace, 2000, 0f);
+            art.boostTrail = Plain("BoostTrail", "MiniPlanes/Trail");
+            art.tubeGlass = Plain("TubeGlass", "MiniPlanes/ShieldBubble");
+            art.tubeGlass.SetColor("_BaseColor", new Color(1f, 0.78f, 0.45f, 1f));
+            art.tubeGlass.SetFloat("_Alpha", 0.85f);
 
             art.silhouette = Plain("PlaneSilhouette", "MiniPlanes/OccludedSilhouette");
             art.silhouette.SetColor("_BaseColor", new Color(0.2f, 0.78f, 0.7f, 1f));
@@ -299,6 +323,7 @@ namespace MiniPlanes.Editor
             art.balloonBomb = Model("BalloonBomb");
             art.balloonTurret = Model("BalloonTurret");
             art.turret = Model("Turret");
+            art.zeppelin = Model("EnemyZeppelin");
 
             art.ringOnset = Vfx("ring_onset");
             art.ringPeak = Vfx("ring_peak");
@@ -318,7 +343,7 @@ namespace MiniPlanes.Editor
             EditorUtility.SetDirty(art);
             Debug.Log("[MiniPlanes] Art: player=" + (art.playerPlane != null) + " fighter=" + (art.enemyFighter != null) +
                       " bomber=" + (art.enemyBomber != null) + " shield=" + (art.balloonShield != null) +
-                      " bomb=" + (art.balloonBomb != null) + " turretBalloon=" + (art.balloonTurret != null) + " turret=" + (art.turret != null) +
+                      " bomb=" + (art.balloonBomb != null) + " turretBalloon=" + (art.balloonTurret != null) + " turret=" + (art.turret != null) + " zeppelin=" + (art.zeppelin != null) +
                       " vfx=" + (art.crashPeak != null) + " font=" + (art.hudFont != null));
             return art;
         }
@@ -413,7 +438,8 @@ namespace MiniPlanes.Editor
                 cfg = ScriptableObject.CreateInstance<InfiniteConfig>();
                 AssetDatabase.CreateAsset(cfg, InfinitePath);
             }
-            cfg.baseLevel = levels[levels.Count - 1];
+            // Waves build on the last level needed for Infinite, not the optional zeppelin level after it.
+            cfg.baseLevel = levels[Mathf.Min(Progression.LevelsForInfinite, levels.Count) - 1];
             EditorUtility.SetDirty(cfg);
             return cfg;
         }

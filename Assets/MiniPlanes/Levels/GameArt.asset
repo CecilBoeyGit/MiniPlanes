@@ -17,6 +17,7 @@ MonoBehaviour:
   fighterMatte: {fileID: 2100000, guid: 992e51a555130054f8a65751597dc653, type: 2}
   bomberMatte: {fileID: 2100000, guid: 8f015bdfd9afe194798b4154497fadfc, type: 2}
   turretMatte: {fileID: 2100000, guid: 136e991cb1b05604ea80038581cbba69, type: 2}
+  zeppelinMatte: {fileID: 2100000, guid: 9cfc331e847c3714ca7041b1b1c2fc1f, type: 2}
   handRock: {fileID: 2100000, guid: d391c9301aadb3c42b570cdb5934c702, type: 2}
   silhouette: {fileID: 2100000, guid: 2aaf014df1318554fba90682c4ba0c68, type: 2}
   bubbleRing: {fileID: 2100000, guid: a2826d78207689d4d8c2a0673aaffd0b, type: 2}
@@ -25,6 +26,9 @@ MonoBehaviour:
   shieldBubble: {fileID: 2100000, guid: f7d587a6e893956419cdee97b61778ac, type: 2}
   projectile: {fileID: 2100000, guid: 2b05f68c7f0a88444915f62d3285ffda, type: 2}
   turretShot: {fileID: 2100000, guid: 6abf03eedfa6272469d4243445040532, type: 2}
+  bossBullet: {fileID: 2100000, guid: b354fda047bffad49adf01372231ec15, type: 2}
+  boostTrail: {fileID: 2100000, guid: 6f7ca3e59df37d4499b00faa64c0eae0, type: 2}
+  tubeGlass: {fileID: 2100000, guid: f80d8fe86d559364d999afb70e482168, type: 2}
   playerPlane: {fileID: 919132149155446097, guid: df0312f1c5a6f8d449f03b86be5fdca1, type: 3}
   enemyFighter: {fileID: 919132149155446097, guid: 00000c545f24dea4097c17eb51678e60, type: 3}
   enemyBomber: {fileID: 919132149155446097, guid: 3731c02602d396643be61d6417074d26, type: 3}
@@ -32,6 +36,7 @@ MonoBehaviour:
   balloonBomb: {fileID: 919132149155446097, guid: 1befd343448ac44448729ef39cb0ccc6, type: 3}
   balloonTurret: {fileID: 0}
   turret: {fileID: 919132149155446097, guid: 7a86b71e3f23fac48a2ba1bd04d23957, type: 3}
+  zeppelin: {fileID: 919132149155446097, guid: c70a59d42e071c0469c2b59033da0fef, type: 3}
   shieldIcon: {fileID: 6348708095578724519, guid: 5316c596288064745a6550652855bf1e, type: 3}
   bombIcon: {fileID: 57449904205575664, guid: a1d1f64f8f3f25345a802246508d64b8, type: 3}
   turretIcon: {fileID: 4855033073084870112, guid: 8c9b20e741230084fa2c1f72ff5c8b3f, type: 3}
