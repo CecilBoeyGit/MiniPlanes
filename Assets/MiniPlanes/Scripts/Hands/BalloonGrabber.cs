@@ -3,8 +3,9 @@ using UnityEngine;
 namespace MiniPlanes
 {
     /// <summary>
-    /// Lets one hand pinch a balloon's crosshair and drag it around the room. The balloon then drifts
-    /// slowly to wherever the crosshair was left. While holding, the hand's scoring ring is suppressed.
+    /// Lets one hand pinch a powerup and move it. A balloon's crosshair follows the pinch and the balloon
+    /// drifts slowly after it. A booster tube is held like a real object: it moves and turns with the hand,
+    /// keeping the grip it was picked up with. While holding, the hand's scoring ring is suppressed.
     /// </summary>
     [DefaultExecutionOrder(45)]
     public class BalloonGrabber : MonoBehaviour
@@ -15,6 +16,8 @@ namespace MiniPlanes
         public float grabRadius = 0.07f;
 
         public PowerBalloon Held { get; private set; }
+        public BoosterTube HeldTube { get; private set; }
+        public bool IsHolding => Held != null || HeldTube != null;
 
         bool _wasPinching;
 
@@ -38,7 +41,7 @@ namespace MiniPlanes
                 else pinching = false;
             }
 
-            if (pinching && !_wasPinching && Held == null) TryGrab(pinchPoint);
+            if (pinching && !_wasPinching && !IsHolding) TryGrab(pinchPoint);
 
             if (Held != null)
             {
@@ -53,8 +56,39 @@ namespace MiniPlanes
                 }
             }
 
-            if (ring != null) ring.Suppressed = Held != null;
+            if (HeldTube != null)
+            {
+                if (!pinching || !HeldTube.IsAlive)
+                {
+                    HeldTube.Release(this);
+                    HeldTube = null;
+                }
+                else
+                {
+                    HeldTube.Drag(pinchPoint, HandRotation(hand, pinchPoint));
+                }
+            }
+
+            if (ring != null) ring.Suppressed = IsHolding;
             _wasPinching = pinching;
+        }
+
+        /// <summary>
+        /// Which way the hand faces: forward from the wrist to the pinch, up out of the back of the hand.
+        /// </summary>
+        public static Quaternion HandRotation(HandSource hand, Vector3 pinchPoint)
+        {
+            Vector3 forward = Vector3.forward;
+            if (hand != null && hand.TryGetJoint(HandJoint.Wrist, out var wrist))
+            {
+                Vector3 f = pinchPoint - wrist;
+                if (f.sqrMagnitude > 1e-6f) forward = f.normalized;
+            }
+            Vector3 up = Vector3.up;
+            if (WristMenuButton.TryGetPalmNormal(hand, out var palmNormal, out _, out _)) up = -palmNormal;
+            if (Mathf.Abs(Vector3.Dot(up.normalized, forward)) > 0.97f) up = Vector3.up;
+            if (Mathf.Abs(Vector3.Dot(up.normalized, forward)) > 0.97f) up = Vector3.right;
+            return Quaternion.LookRotation(forward, up);
         }
 
         void TryGrab(Vector3 point)
@@ -71,6 +105,26 @@ namespace MiniPlanes
                     best = b;
                 }
             }
+
+            BoosterTube bestTube = null;
+            float bestTubeDist = float.PositiveInfinity;
+            foreach (var t in BoosterTube.Active)
+            {
+                if (t == null || !t.CanGrabAt(point)) continue;
+                float d = Mathf.Max(0f, t.SurfaceDistance(point));
+                if (d < bestTubeDist)
+                {
+                    bestTubeDist = d;
+                    bestTube = t;
+                }
+            }
+
+            if (bestTube != null && (best == null || bestTubeDist <= bestDist))
+            {
+                bestTube.Grab(this, point, HandRotation(hand, point));
+                HeldTube = bestTube;
+                return;
+            }
             if (best == null) return;
             best.Grab(this);
             Held = best;
@@ -82,6 +136,11 @@ namespace MiniPlanes
             {
                 Held.Release(this);
                 Held = null;
+            }
+            if (HeldTube != null)
+            {
+                HeldTube.Release(this);
+                HeldTube = null;
             }
             if (ring != null) ring.Suppressed = false;
         }
