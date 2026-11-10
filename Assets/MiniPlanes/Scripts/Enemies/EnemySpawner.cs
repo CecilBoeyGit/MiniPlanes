@@ -3,7 +3,10 @@ using UnityEngine;
 
 namespace MiniPlanes
 {
-    /// <summary>Spawns fighters, bombers and balloons in front of the player during a flight.</summary>
+    /// <summary>
+    /// Spawns fighters, bombers, balloons and booster tubes in front of the player during a flight, and the
+    /// zeppelin on a boss level.
+    /// </summary>
     public class EnemySpawner : MonoBehaviour
     {
         public Transform head;
@@ -25,12 +28,18 @@ namespace MiniPlanes
         public float balloonMaxHeight = 0.05f;
 
         public event Action<EnemyPlane> EnemySpawned;
+        public event Action<Zeppelin> ZeppelinSpawned;
+
+        /// <summary>Spawned since the flight began, for the per-flight caps.</summary>
+        public int ShieldsSpawned { get; private set; }
+        public int TurretsSpawned { get; private set; }
+        public int TubesSpawned { get; private set; }
 
         LevelConfig _cfg;
         MiniPlane _target;
         Vector3 _forward = Vector3.forward;
         bool _active;
-        float _fighterTimer, _bomberTimer, _shieldTimer, _turretTimer;
+        float _fighterTimer, _bomberTimer, _shieldTimer, _turretTimer, _tubeTimer;
         int _seed;
         System.Random _rng = new System.Random(1);
 
@@ -45,11 +54,14 @@ namespace MiniPlanes
             if (_forward.sqrMagnitude < 1e-4f) _forward = Vector3.forward;
             _forward.Normalize();
             _active = cfg != null;
+            ShieldsSpawned = TurretsSpawned = TubesSpawned = 0;
             if (!_active) return;
             _fighterTimer = cfg.fighterSpawnInterval * 0.4f;
             _bomberTimer = cfg.bomberSpawnInterval * 0.5f;
             _shieldTimer = cfg.shieldBalloonInterval * 0.4f;
             _turretTimer = cfg.turretBalloonInterval * 0.6f;
+            _tubeTimer = cfg.boosterTubeInterval * 0.35f;
+            if (cfg.bossLevel > 0) SpawnZeppelin(forward);
         }
 
         public void End()
@@ -60,6 +72,8 @@ namespace MiniPlanes
             PowerBalloon.DestroyAll();
             BombBalloon.DestroyAll();
             TurretShot.DestroyAll();
+            BoosterTube.DestroyAll();
+            Zeppelin.DestroyAll();
         }
 
         void Update()
@@ -87,13 +101,31 @@ namespace MiniPlanes
                 }
             }
 
+            if (_cfg.boosterTubeInterval > 0f)
+            {
+                _tubeTimer -= dt;
+                if (_tubeTimer <= 0f)
+                {
+                    _tubeTimer = _cfg.boosterTubeInterval * Jitter();
+                    if (Under(TubesSpawned, _cfg.maxBoosterTubes))
+                    {
+                        TubesSpawned++;
+                        SpawnTube((TubeShape)_rng.Next(4));
+                    }
+                }
+            }
+
             if (_cfg.useBalloons)
             {
                 _shieldTimer -= dt;
                 if (_shieldTimer <= 0f)
                 {
                     _shieldTimer = _cfg.shieldBalloonInterval * Jitter();
-                    SpawnBalloon(BalloonKind.Shield);
+                    if (Under(ShieldsSpawned, _cfg.maxShieldBalloons))
+                    {
+                        ShieldsSpawned++;
+                        SpawnBalloon(BalloonKind.Shield);
+                    }
                 }
                 if (_cfg.turretBalloonInterval > 0f)
                 {
@@ -101,10 +133,19 @@ namespace MiniPlanes
                     if (_turretTimer <= 0f)
                     {
                         _turretTimer = _cfg.turretBalloonInterval * Jitter();
-                        SpawnBalloon(BalloonKind.Turret);
+                        if (Under(TurretsSpawned, _cfg.maxTurretBalloons))
+                        {
+                            TurretsSpawned++;
+                            SpawnBalloon(BalloonKind.Turret);
+                        }
                     }
                 }
             }
+        }
+
+        static bool Under(int count, int max)
+        {
+            return max < 0 || count < max;
         }
 
         float Jitter()
@@ -141,6 +182,19 @@ namespace MiniPlanes
             return enemy;
         }
 
+        /// <summary>A fighter starting at a given point, such as one of the zeppelin's decks.</summary>
+        public EnemyPlane SpawnFighterAt(Vector3 position)
+        {
+            _seed++;
+            var go = new GameObject("Fighter");
+            go.transform.SetParent(transform, false);
+            go.transform.position = position;
+            var enemy = go.AddComponent<EnemyPlane>();
+            enemy.Setup(_cfg, _target, head, art, _seed);
+            EnemySpawned?.Invoke(enemy);
+            return enemy;
+        }
+
         public BomberPlane SpawnBomber()
         {
             _seed++;
@@ -154,19 +208,52 @@ namespace MiniPlanes
             return bomber;
         }
 
-        public PowerBalloon SpawnBalloon(BalloonKind kind = BalloonKind.Shield)
+        Vector3 PowerupSpawnPoint()
         {
             Vector3 centre = head != null ? head.position : new Vector3(0f, 1.1f, 0f);
             float az = Mathf.Lerp(-balloonHalfArcDeg, balloonHalfArcDeg, (float)_rng.NextDouble());
             float radius = Mathf.Lerp(balloonMinRadius, balloonMaxRadius, (float)_rng.NextDouble());
             float height = Mathf.Lerp(balloonMinHeight, balloonMaxHeight, (float)_rng.NextDouble());
-            Vector3 pos = centre + Quaternion.AngleAxis(az, Vector3.up) * _forward * radius + Vector3.up * height;
+            return centre + Quaternion.AngleAxis(az, Vector3.up) * _forward * radius + Vector3.up * height;
+        }
+
+        public PowerBalloon SpawnBalloon(BalloonKind kind = BalloonKind.Shield)
+        {
+            Vector3 pos = PowerupSpawnPoint();
 
             var go = new GameObject(kind == BalloonKind.Shield ? "ShieldBalloon" : "TurretBalloon");
             go.transform.SetParent(transform, false);
             var balloon = go.AddComponent<PowerBalloon>();
             balloon.Setup(kind, _cfg, _target, art, pos);
             return balloon;
+        }
+
+        /// <summary>A booster tube floating within reach, lying sideways across the player's view.</summary>
+        public BoosterTube SpawnTube(TubeShape shape)
+        {
+            Vector3 pos = PowerupSpawnPoint();
+            Vector3 toHead = (head != null ? head.position : pos + _forward) - pos;
+            toHead.y = 0f;
+            Vector3 across = toHead.sqrMagnitude > 1e-4f ? Vector3.Cross(Vector3.up, toHead.normalized) : Vector3.right;
+            float tilt = Mathf.Lerp(-20f, 20f, (float)_rng.NextDouble());
+            var go = new GameObject("BoosterTube");
+            go.transform.SetParent(transform, false);
+            var tube = go.AddComponent<BoosterTube>();
+            tube.Setup(shape, _cfg, _target, art, pos, Quaternion.AngleAxis(tilt, toHead.normalized) * Quaternion.LookRotation(across, Vector3.up), hands);
+            return tube;
+        }
+
+        /// <summary>The boss for this level, hanging in the distance ahead.</summary>
+        public Zeppelin SpawnZeppelin(Vector3 forward)
+        {
+            Zeppelin.DestroyAll();
+            var go = new GameObject("Zeppelin");
+            go.transform.SetParent(transform, false);
+            var zeppelin = go.AddComponent<Zeppelin>();
+            Vector3 headPos = head != null ? head.position : new Vector3(0f, 1.1f, 0f);
+            zeppelin.Setup(_cfg, _target, head, hands, art, this, headPos, forward, _seed + 101);
+            ZeppelinSpawned?.Invoke(zeppelin);
+            return zeppelin;
         }
     }
 }
