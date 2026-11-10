@@ -96,12 +96,18 @@ namespace MiniPlanes
             yield return TryStep(MergedRing());
             yield return TryStep(PauseMenu());
             yield return TryStep(LivesAndCoins());
+            yield return TryStep(TutorialReplayPaysNothing());
             yield return TryStep(Hangar());
+            yield return TryStep(PlanePerks());
             yield return TryStep(Level4());
             yield return TryStep(Level5());
+            yield return TryStep(BoosterTubes());
+            yield return TryStep(Islands());
             yield return TryStep(Level6());
             yield return TryStep(Turret());
+            yield return TryStep(InfinitePowerups());
             yield return TryStep(InfiniteMode());
+            yield return TryStep(ZeppelinBoss());
             Finish();
         }
 
@@ -320,6 +326,50 @@ namespace MiniPlanes
             _gm.menu.Close();
             _gm.menu.Close();
 
+            // Booster tubes: the four shapes.
+            var tubes = new System.Collections.Generic.List<GameObject>();
+            for (int i = 0; i < 4; i++)
+            {
+                var go = new GameObject("PreviewTube");
+                var t = go.AddComponent<BoosterTube>();
+                t.Setup((TubeShape)i, null, null, _gm.art, InFront(0.4f, i < 2 ? -0.03f : 0.0f, 0.09f - 0.065f * i),
+                    Quaternion.LookRotation(Vector3.right, Vector3.up));
+                tubes.Add(go);
+            }
+            yield return null;
+            Shoot("booster_tubes");
+            foreach (var go in tubes) Destroy(go);
+
+            // Floating islands, then one shattered.
+            var islandCfg = Instantiate(_gm.levels[5]);
+            islandCfg.islandCount = 6;
+            _gm.Islands.Build(islandCfg, null, _head.position, Vector3.forward, 5);
+            yield return null;
+            Shoot("floating_islands");
+            if (FloatingIsland.Active.Count > 0) FloatingIsland.Active[0].Shatter(Vector3.zero);
+            yield return WaitSeconds(0.6f);
+            Shoot("island_shards");
+            _gm.Islands.Clear();
+            Destroy(islandCfg);
+
+            // The zeppelin arriving, firing, and a missile close up.
+            var bossCfg = Instantiate(_gm.levels[6]);
+            var zgo = new GameObject("PreviewZeppelin");
+            var zep = zgo.AddComponent<Zeppelin>();
+            zep.Setup(bossCfg, _gm.Plane, _head, _gm.spawner.hands, _gm.art, _gm.spawner, _head.position, Vector3.forward, 3);
+            yield return WaitSeconds(zep.arriveSeconds + 0.2f);
+            Shoot("zeppelin_boss");
+            yield return WaitSeconds(2f);
+            Shoot("zeppelin_barrage");
+            var shotMissile = new GameObject("PreviewMissile").AddComponent<BossMissile>();
+            shotMissile.Setup(bossCfg, null, null, _gm.art, InFront(0.2f), Vector3.right + Vector3.back * 0.3f);
+            yield return null;
+            Shoot("missile_close");
+            Destroy(shotMissile.gameObject);
+            Zeppelin.DestroyAll();
+            Projectile.DestroyAll();
+            Destroy(bossCfg);
+
             // The wrist button, then the pause panel it opens.
             yield return StartAndWaitForFlight(0);
             _left.PoseOpenPalm(InFront(0.3f, -0.02f, -0.12f), Vector3.up, -Vector3.forward);
@@ -390,6 +440,7 @@ namespace MiniPlanes
             _gm.wristMenu.hands = sources;
             _gm.pausePanel.SetHead(_head);
             _gm.pausePanel.SetHands(sources);
+            _gm.Islands.Init(_gm.art, sources, _gm.Plane);
         }
 
         void ParkHands()
@@ -717,8 +768,8 @@ namespace MiniPlanes
             Check("the start panel opens", _gm.menu.IsStartPage);
             Check("level 1 is open", _gm.menu.IsButtonInteractable("level0"));
             bool othersLocked = true;
-            for (int i = 1; i < 6; i++) othersLocked &= !_gm.menu.IsButtonInteractable("level" + i);
-            Check("levels 2 to 6 are locked", othersLocked);
+            for (int i = 1; i < Progression.TutorialLevelCount; i++) othersLocked &= !_gm.menu.IsButtonInteractable("level" + i);
+            Check("levels 2 to 7 are locked", othersLocked && _gm.menu.levelRows.Length >= 7);
             Check("Infinite is locked", !_gm.menu.IsButtonInteractable("infinite"));
             Check("the level list can scroll", _gm.menu.ScrollMax > 0f, "max " + _gm.menu.ScrollMax);
 
@@ -751,6 +802,7 @@ namespace MiniPlanes
         IEnumerator Level1()
         {
             Note("Level 1: visible path, slow flight, C ring scores 2");
+            int coinsAtStart = Progression.Coins;
             _gm.StartLevel(0);
             yield return null;
             yield return WaitSeconds(1f);
@@ -806,6 +858,7 @@ namespace MiniPlanes
             int before = _gm.Score;
             yield return FlyThroughRings(1, 10f);
             Check("a single C ring scores 2 points", _gm.Score == before + 2, "score " + _gm.Score);
+            Check("a ring in a tutorial pays no coins", Progression.Coins == coinsAtStart, Progression.Coins + " from " + coinsAtStart);
             Check("the HUD shows the score", _gm.hud.ScoreText == _gm.Score.ToString(), _gm.hud.ScoreText);
 
             yield return FlyThroughRings(2, 15f);
@@ -814,6 +867,8 @@ namespace MiniPlanes
             Check("level 1 ends with a result panel", _gm.CurrentFlow == GameManager.Flow.Result);
             Check("level 1 passes", _gm.LastFlightPassed, "plane " + _gm.Plane.LastCrashReason);
             Check("passing level 1 unlocks level 2", Progression.IsLevelUnlocked(1) && !Progression.IsLevelUnlocked(2));
+            Check("the first clear of a tutorial level pays 5 coins", _gm.LastFirstClearCoins == 5 && Progression.Coins == coinsAtStart + 5,
+                Progression.Coins + " from " + coinsAtStart);
             Check("the Next button is offered", _gm.menu.ButtonPosition("next").HasValue);
         }
 
@@ -906,7 +961,7 @@ namespace MiniPlanes
             var plane = _gm.Plane;
             int coins = Progression.Coins;
             yield return FlyThroughRings(1, 10f);
-            Check("a C ring earns 2 coins", Progression.Coins == coins + _gm.singleRingCoins, Progression.Coins + " from " + coins);
+            Check("a C ring in a tutorial pays no coins", Progression.Coins == coins, Progression.Coins + " from " + coins);
             Check("the HUD shows the coins", _gm.hud.CoinsText == Progression.Coins.ToString(), _gm.hud.CoinsText);
 
             float at = plane.Distance;
@@ -946,6 +1001,16 @@ namespace MiniPlanes
             _gm.menu.Press("plane1");
             Check("a locked plane hides the paint panel", !_gm.menu.palettePanel.activeInHierarchy);
             Check("a locked plane can't be bought without coins", !_gm.menu.IsButtonInteractable("plane_action"));
+            yield return null;
+            var previewRenderer = _gm.menu.previewAnchor.GetComponentInChildren<MeshRenderer>();
+            var previewBlock = new MaterialPropertyBlock();
+            if (previewRenderer != null) previewRenderer.GetPropertyBlock(previewBlock);
+            float previewSat = previewRenderer != null ? previewBlock.GetFloat("_SatScale") : -1f;
+            Check("a locked plane shows in its own colours", previewRenderer != null && (Mathf.Approximately(previewSat, 0f) || Mathf.Abs(previewSat - 1f) < 0.01f),
+                "saturation " + previewSat.ToString("F2"));
+            var actionBg = _gm.menu.planeAction.background;
+            Check("only the Buy button greys out", actionBg != null && actionBg.color == _gm.menu.actionUnavailable,
+                actionBg != null ? actionBg.color.ToString() : "none");
 
             Progression.AddCoins(600);
             _gm.menu.Press("plane1");
@@ -992,11 +1057,39 @@ namespace MiniPlanes
             plane.GiveShield();
             int score = _gm.Score;
             int coins = Progression.Coins;
+            var tcfg = _gm.CurrentConfig;
+            Check("the turret fires at least 6 rounds a second", tcfg.turretFireInterval <= 1f / 6f, (1f / tcfg.turretFireInterval).ToString("F1") + " a second");
+            Check("a fitted turret starts with 6 seconds", plane.Turret != null && Mathf.Abs(plane.Turret.TimeLeft - 6f) < 0.1f,
+                plane.Turret != null ? plane.Turret.TimeLeft.ToString("F2") : "none");
+            float fittedAt = Time.time;
             var fighter = _gm.spawner.SpawnFighter();
             fighter.transform.position = plane.Position + plane.Forward * 0.25f + Vector3.up * 0.05f;
+            float aimedAt = Time.time;
             yield return WaitFor(() => fighter == null || !fighter.IsAlive, 6f);
+            float took = Time.time - aimedAt;
             Check("the turret shoots a fighter down", fighter == null || !fighter.IsAlive, "shots " + (plane.Turret != null ? plane.Turret.ShotsFired : 0));
-            Check("a turret kill scores and pays a coin", _gm.Score > score && Progression.Coins > coins);
+            Check("it takes the turret under a second", took < 1f, took.ToString("F2") + " s");
+            Check("a turret kill scores", _gm.Score > score);
+
+            // Fighters circling at different sides: the turret should get nearly all of them.
+            var circlers = new System.Collections.Generic.List<EnemyPlane>();
+            for (int i = 0; i < 3; i++)
+            {
+                var f = _gm.spawner.SpawnFighter();
+                Vector3 side = Quaternion.AngleAxis(120f * i, Vector3.up) * plane.Forward;
+                f.transform.position = plane.Position + side * 0.35f + Vector3.up * (0.04f * (i - 1));
+                circlers.Add(f);
+            }
+            yield return WaitFor(() => !circlers.Exists(f => f != null && f.IsAlive) || !plane.HasTurret, 3f);
+            int downed = circlers.FindAll(f => f == null || !f.IsAlive).Count;
+            Check("the turret downs fighters all round the plane", downed >= 3, downed + " of 3");
+
+            if (plane.IsFlying && plane.HasTurret)
+            {
+                yield return WaitFor(() => !plane.HasTurret || !plane.IsFlying, 8f);
+                float lasted = Time.time - fittedAt;
+                Check("the turret comes off after 6 seconds", !plane.HasTurret && lasted > 5.5f && lasted < 6.6f, lasted.ToString("F2") + " s");
+            }
 
             yield return AbortToMenu();
             Check("the turret only lasts the flight", !plane.HasTurret);
@@ -1283,7 +1376,7 @@ namespace MiniPlanes
             Check("cupping reads as covering", covered.BothHandsCovering());
             yield return WaitSeconds(cfg.bombCoverHoldSeconds + 0.05f);
             Check("both hands contain the blast", covered == null || covered.WasContained);
-            Check("containing a bomb earns 2 coins", Progression.Coins >= coinsBeforeCover + _gm.bombCoverCoins, Progression.Coins + " from " + coinsBeforeCover);
+            Check("covering a bomb in a tutorial pays no coins", Progression.Coins == coinsBeforeCover, Progression.Coins + " from " + coinsBeforeCover);
             Check("a contained blast leaves the plane flying", plane.IsFlying && plane.HitsTaken == 0);
             ParkHands();
             yield return null;
@@ -1294,9 +1387,24 @@ namespace MiniPlanes
             // spawns: the plane must arm it naturally and still be in range when the fuse runs out.
             yield return StartAndWaitForFlight(5);
             plane = _gm.Plane;
-            // Far enough ahead that the plane arms it a full fuse before passing.
+            // Far enough ahead that the plane arms it a full fuse before passing, at a spot the path passes
+            // only once: a path that doubles back would time the fuse to its closer second pass.
             float along = plane.Distance + plane.Speed * (cfg.bombFuseSeconds + 0.6f);
             Vector3 side = Vector3.Cross(plane.Path.TangentAt(along), Vector3.up).normalized;
+            for (float tryAt = along; tryAt < Mathf.Min(along + 1.2f, plane.Path.Length - 0.3f); tryAt += 0.05f)
+            {
+                Vector3 trySide = Vector3.Cross(plane.Path.TangentAt(tryAt), Vector3.up).normalized;
+                Vector3 spot = plane.Path.PositionAt(tryAt) + trySide * cfg.bombPathOffset;
+                float elsewhere = float.PositiveInfinity;
+                for (float d = 0f; d < plane.Path.Length; d += 0.01f)
+                    if (Mathf.Abs(d - tryAt) > 0.25f) elsewhere = Mathf.Min(elsewhere, Vector3.Distance(plane.Path.PositionAt(d), spot));
+                if (elsewhere > cfg.bombPathOffset + 0.1f)
+                {
+                    along = tryAt;
+                    side = trySide;
+                    break;
+                }
+            }
             var uncovered = MakeBomb(plane.Path.PositionAt(along) + side * cfg.bombPathOffset);
             yield return WaitFor(() => uncovered != null && uncovered.CurrentState == BombBalloon.State.Armed, 3f);
             Check("the plane flying past arms the balloon", uncovered != null && uncovered.CurrentState == BombBalloon.State.Armed);
@@ -1328,7 +1436,7 @@ namespace MiniPlanes
             int coins = Progression.Coins;
             yield return FlickEnemy(target);
             Check("flicking a bomber scores extra", _gm.Score == before + _gm.bomberFlickPoints && _gm.bomberFlickPoints > _gm.flickPoints, "score " + _gm.Score + " from " + before);
-            Check("downing an enemy earns a coin", Progression.Coins == coins + _gm.enemyCoins, Progression.Coins + " from " + coins);
+            Check("downing an enemy in a tutorial pays no coins", Progression.Coins == coins, Progression.Coins + " from " + coins);
             yield return AbortToMenu();
         }
 
@@ -1359,8 +1467,25 @@ namespace MiniPlanes
             Check("a survived wave pays 5 coins", _gm.CoinsThisRun >= _gm.infinite.coinsPerWave, "run coins " + _gm.CoinsThisRun);
 
             // Score something so a high score is recorded, then lose every life.
+            int ringCoins = Progression.Coins;
             yield return FlyThroughRings(1, 10f);
+            Check("a C ring in Infinite pays 2 coins", Progression.Coins == ringCoins + 2, Progression.Coins + " from " + ringCoins);
             int score = _gm.Score;
+
+            if (_gm.Plane.IsFlying)
+            {
+                int coverCoins = Progression.Coins;
+                var bomb = MakeBomb(_gm.Plane.Position + Vector3.up * 0.1f);
+                yield return null;
+                yield return null;
+                Vector3 bc = bomb.Position;
+                _left.PosePalm(bc - Vector3.right * 0.08f);
+                _right.PosePalm(bc + Vector3.right * 0.08f);
+                yield return WaitSeconds(_gm.CurrentConfig.bombCoverHoldSeconds + 0.05f);
+                Check("covering a bomb in Infinite pays 5 coins", Progression.Coins == coverCoins + 5, Progression.Coins + " from " + coverCoins);
+                ParkHands();
+                yield return null;
+            }
             for (int life = 0; life < 4 && _gm.CurrentFlow == GameManager.Flow.Flying; life++)
             {
                 yield return WaitFor(() => _gm.Plane.IsFlying || _gm.CurrentFlow != GameManager.Flow.Flying, 5f);
@@ -1370,6 +1495,500 @@ namespace MiniPlanes
             yield return WaitFor(() => _gm.CurrentFlow == GameManager.Flow.Result, 20f);
             Check("Infinite ends in a result panel", _gm.CurrentFlow == GameManager.Flow.Result, _gm.Plane.LastCrashReason);
             Check("the high score is saved", Progression.HighScore >= score && score > 0, "high " + Progression.HighScore + " score " + score);
+        }
+
+        // ---------------------------------------------------------------- coins, perks, tubes, islands, zeppelin
+
+        IEnumerator TutorialReplayPaysNothing()
+        {
+            Note("A passed tutorial level pays nothing when replayed");
+            int coins = Progression.Coins;
+            yield return StartAndWaitForFlight(0);
+            yield return FlyThroughRings(2, 15f);
+            Check("rings in a replayed tutorial pay no coins", Progression.Coins == coins, Progression.Coins + " from " + coins);
+            yield return WaitFor(() => _gm.CurrentFlow == GameManager.Flow.Result, 30f);
+            Check("the replayed level passes", _gm.LastFlightPassed, _gm.Plane.LastCrashReason);
+            Check("passing it again pays no first-clear coins", _gm.LastFirstClearCoins == 0 && Progression.Coins == coins, Progression.Coins + " from " + coins);
+            yield return AbortToMenu();
+        }
+
+        IEnumerator PlanePerks()
+        {
+            Note("The Bluebird fits its own turret; the Pusher Racer boosts at each wave start");
+            var catalog = _gm.catalog;
+            if (catalog == null || catalog.Count < 3) yield break;
+            Check("the Bluebird has the wave turret perk", catalog.Get(1).perk == PlanePerk.WaveTurret);
+            Check("the Pusher Racer has the wave boost perk", catalog.Get(2).perk == PlanePerk.WaveBoost);
+            Check("their descriptions say so", catalog.Get(1).description.Contains("turret") && catalog.Get(2).description.Contains("Boosts"));
+
+            Progression.GrantPlane(catalog.Get(1).id);
+            Progression.SelectedPlane = catalog.Get(1).id;
+            _gm.ApplyPlaneSelection();
+            Progression.MarkPassed(2);
+            yield return StartAndWaitForFlight(3);
+            var plane = _gm.Plane;
+            plane.AddFuel(100f);
+            Check("no turret before an enemy shows up", !plane.HasTurret);
+            yield return WaitFor(() => EnemyPlane.Active.Count > 0, 10f);
+            yield return null;
+            Check("the Bluebird fits its turret when the first fighter shows up", plane.HasTurret);
+            Check("its turret has the usual 6 seconds", plane.Turret != null && plane.Turret.TimeLeft > 5.5f && plane.Turret.TimeLeft <= 6f,
+                plane.Turret != null ? plane.Turret.TimeLeft.ToString("F2") : "none");
+            yield return AbortToMenu();
+
+            Progression.GrantPlane(catalog.Get(2).id);
+            Progression.SelectedPlane = catalog.Get(2).id;
+            _gm.ApplyPlaneSelection();
+            yield return StartAndWaitForFlight(0);
+            yield return WaitSeconds(0.6f);
+            Check("the Pusher Racer boosts at the start of the wave", plane.IsBoosting && plane.Speed > plane.BaseSpeed * 1.4f,
+                plane.Speed.ToString("F3") + " vs " + plane.BaseSpeed.ToString("F3"));
+            yield return WaitSeconds(catalog.Get(2).perkBoostSeconds);
+            Check("its boost ends after 3 seconds", !plane.IsBoosting && Mathf.Abs(plane.Speed - plane.BaseSpeed) < 1e-3f, plane.Speed.ToString("F3"));
+            yield return AbortToMenu();
+
+            Progression.SelectedPlane = catalog.Get(0).id;
+            _gm.ApplyPlaneSelection();
+        }
+
+        IEnumerator BoosterTubes()
+        {
+            Note("Booster tubes: four shapes, held like an object, a clean pass boosts, the wall breaks them");
+            Progression.MarkPassed(3);
+            yield return StartAndWaitForFlight(4);
+            var plane = _gm.Plane;
+            var cfg = _gm.CurrentConfig;
+            plane.AddFuel(100f);
+            plane.GiveShield();
+            Check("level 5 hands out booster tubes", cfg.boosterTubeInterval > 0f);
+
+            var shapes = new System.Collections.Generic.List<BoosterTube>();
+            for (int i = 0; i < 4; i++) shapes.Add(_gm.spawner.SpawnTube((TubeShape)i));
+            yield return null;
+            Check("straight tubes come short and long", shapes[0].BendRadius == 0f && shapes[1].BendRadius == 0f && shapes[1].Length > shapes[0].Length * 1.5f);
+            Check("curved tubes come short and long", shapes[2].BendRadius > 0f && shapes[3].BendRadius > 0f && shapes[3].Length > shapes[2].Length * 1.5f);
+            float chord = Vector3.Distance(shapes[3].EndPosition(0), shapes[3].EndPosition(1));
+            Check("a curved tube really bends", chord < shapes[3].Length * 0.95f, chord.ToString("F3") + " of " + shapes[3].Length.ToString("F3"));
+            Check("a tube is about as wide as a C ring", shapes[0].innerRadius > 0.03f && shapes[0].innerRadius < 0.045f, shapes[0].innerRadius.ToString("F3"));
+            for (int i = 1; i < 4; i++) Destroy(shapes[i].gameObject);
+            var tube = shapes[0];
+
+            // Pick it up by its wall, move it, turn it.
+            var grabber = _gm.rings[1].GetComponent<BalloonGrabber>();
+            Vector3 grip = tube.transform.TransformPoint(tube.LocalCentreline[8] + Vector3.up * (tube.innerRadius + tube.wallThickness));
+            Vector3 dir = (grip - _head.position).normalized;
+            _right.PosePinch(grip, dir);
+            yield return null;
+            yield return null;
+            Check("a pinch picks up a booster tube", grabber.HeldTube == tube);
+            Vector3 startPos = tube.transform.position;
+            Quaternion startRot = tube.transform.rotation;
+            _right.PosePinch(grip + Vector3.right * 0.1f, dir);
+            yield return WaitSeconds(0.4f);
+            Check("a held tube moves with the hand", Vector3.Distance(tube.transform.position, startPos + Vector3.right * 0.1f) < 0.01f,
+                Vector3.Distance(tube.transform.position, startPos + Vector3.right * 0.1f).ToString("F3"));
+            _right.PosePinch(grip + Vector3.right * 0.1f, Quaternion.AngleAxis(60f, Vector3.up) * dir);
+            yield return WaitSeconds(0.4f);
+            float turned = Quaternion.Angle(startRot, tube.transform.rotation);
+            Check("a held tube turns with the hand", Mathf.Abs(turned - 60f) < 10f, turned.ToString("F0") + " degrees");
+            ParkHands();
+            yield return null;
+            Vector3 leftAt = tube.transform.position;
+            yield return WaitSeconds(0.5f);
+            Check("letting go leaves the tube where it was put", grabber.HeldTube == null && Vector3.Distance(tube.transform.position, leftAt) < 0.002f);
+
+            // Line it up with the straightest stretch of path just ahead.
+            float L = tube.Length;
+            float bestD = -1f, bestDev = float.PositiveInfinity;
+            float end = Mathf.Min(plane.Distance + 0.7f, plane.Path.Length - L - 0.1f);
+            for (float d = plane.Distance + 0.2f; d < end; d += 0.01f)
+            {
+                Vector3 a = plane.Path.PositionAt(d), b = plane.Path.PositionAt(d + L);
+                float dev = 0f;
+                for (int k = 1; k < 8; k++) dev = Mathf.Max(dev, HandRing.DistancePointSegment(plane.Path.PositionAt(d + L * k / 8f), a, b));
+                if (dev < bestDev)
+                {
+                    bestDev = dev;
+                    bestD = d;
+                }
+            }
+            int boosts = 0, walls = 0;
+            Action<BoosterTube> onBoost = t => boosts++;
+            Action<BoosterTube> onWall = t => walls++;
+            BoosterTube.AnyBoosted += onBoost;
+            BoosterTube.AnyWallHit += onWall;
+            Vector3 p0 = plane.Path.PositionAt(bestD), p1 = plane.Path.PositionAt(bestD + L);
+            ClearTubesExcept(tube);
+            tube.PlaceAt((p0 + p1) * 0.5f, Quaternion.LookRotation(p1 - p0, Vector3.up));
+            yield return WaitFor(() => boosts + walls > 0 || plane.Distance > bestD + L + 0.1f || !plane.IsFlying, 6f);
+            Check("flying cleanly through a tube boosts the plane", boosts == 1 && plane.IsBoosting,
+                "boosts " + boosts + " walls " + walls + " bend " + bestDev.ToString("F3"));
+            yield return WaitSeconds(0.3f);
+            Check("a boost speeds the plane up", plane.Speed > plane.BaseSpeed * (cfg.boostSpeedMultiplier - 0.05f), plane.Speed.ToString("F3"));
+            yield return WaitSeconds(cfg.boostSeconds + 0.3f);
+            Check("the boost wears off", !plane.IsBoosting && Mathf.Abs(plane.Speed - plane.BaseSpeed) < 1e-3f, plane.Speed.ToString("F3"));
+
+            // A tube lying across the path: the plane clips its wall.
+            yield return WaitFor(() => plane.IsFlying, 5f);
+            var blocker = _gm.spawner.SpawnTube(TubeShape.StraightLong);
+            int hitsBefore = plane.HitsTaken;
+            float dW = plane.Distance + plane.Speed * 0.8f;
+            Vector3 at = plane.Path.PositionAt(dW);
+            Vector3 tan = plane.Path.TangentAt(dW);
+            Vector3 across = Vector3.Cross(tan, Vector3.up);
+            if (across.sqrMagnitude < 1e-4f) across = Vector3.right;
+            Vector3 lift = Vector3.Cross(across.normalized, tan).normalized;
+            ClearTubesExcept(blocker);
+            blocker.PlaceAt(at + lift * (blocker.innerRadius + blocker.wallThickness * 0.5f), Quaternion.LookRotation(across.normalized, lift));
+            yield return WaitFor(() => walls > 0 || plane.Distance > dW + 0.1f || !plane.IsFlying, 4f);
+            yield return null;
+            Check("clipping a tube's wall breaks it", walls == 1 && blocker == null, "walls " + walls);
+            Check("a tube is used up by a clean pass", tube == null);
+            Check("a broken tube gives no boost", !plane.IsBoosting);
+            Check("a tube's wall doesn't hurt the plane", plane.HitsTaken == hitsBefore, plane.HitsTaken + " hits");
+            // A hand knocking into a tube breaks it; a gentle touch doesn't.
+            int knocks = 0;
+            Action<BoosterTube> onKnock = t => knocks++;
+            BoosterTube.AnyKnocked += onKnock;
+            var touched = _gm.spawner.SpawnTube(TubeShape.StraightShort);
+            ClearTubesExcept(touched);
+            yield return WaitSeconds(0.2f);
+            Vector3 side = touched.transform.TransformPoint(touched.LocalCentreline[8] + Vector3.up * (touched.innerRadius + touched.wallThickness * 0.5f));
+            HandMotion.Reset(_left);
+            for (int i = 0; i < 20; i++)
+            {
+                _left.PosePalm(side + Vector3.up * 0.002f);
+                yield return null;
+            }
+            Check("a gentle touch leaves a tube alone", touched != null && knocks == 0);
+            ParkHands();
+            yield return null;
+            HandMotion.Reset(_left);
+            _left.PosePalm(side + Vector3.up * 0.2f);
+            yield return null;
+            for (int i = 0; i < 8 && touched != null; i++)
+            {
+                _left.PosePalm(side + Vector3.up * (0.15f - 0.04f * i));
+                yield return null;
+            }
+            yield return null;
+            Check("a hand knocking into a tube breaks it", knocks >= 1 && touched == null, "knocks " + knocks);
+            ParkHands();
+            BoosterTube.AnyKnocked -= onKnock;
+            BoosterTube.AnyBoosted -= onBoost;
+            BoosterTube.AnyWallHit -= onWall;
+            yield return AbortToMenu();
+        }
+
+        /// <summary>The level spawns its own tubes; tests that count tube events need only theirs.</summary>
+        static void ClearTubesExcept(BoosterTube keep)
+        {
+            foreach (var t in BoosterTube.Active.ToArray())
+                if (t != null && t != keep) DestroyImmediate(t.gameObject);
+        }
+
+        IEnumerator Islands()
+        {
+            Note("Floating islands: Infinite from wave 4, off the path, shatter, shards, dust");
+            var inf = _gm.infinite;
+            var probe = ScriptableObject.CreateInstance<LevelConfig>();
+            inf.Apply(probe, inf.islandsFromWave - 1);
+            int beforeCount = probe.islandCount;
+            inf.Apply(probe, inf.islandsFromWave);
+            Check("islands first appear in Infinite wave 4", inf.islandsFromWave == 4 && beforeCount == 0 && probe.islandCount > 0, probe.islandCount.ToString());
+            inf.Apply(probe, 40);
+            Check("island numbers respect the cap", probe.islandCount <= inf.capIslands, probe.islandCount.ToString());
+            Destroy(probe);
+            Check("tutorial levels have no islands", _gm.levels.TrueForAll(l => l.islandCount == 0));
+
+            yield return StartAndWaitForFlight(0);
+            var plane = _gm.Plane;
+            var cfg = Instantiate(_gm.CurrentConfig);
+            cfg.islandCount = 6;
+            _gm.Islands.Build(cfg, plane.Path, _head.position, Vector3.forward, 11);
+            yield return null;
+            int count = FloatingIsland.Active.Count;
+            Check("the islands find room around the player", count >= 5, count + " of 6");
+            float worst = float.PositiveInfinity;
+            foreach (var isl in FloatingIsland.Active)
+                worst = Mathf.Min(worst, IslandField.DistanceToPath(plane.Path, isl.Position) - isl.Size * 0.6f);
+            Check("no island sits on the flight path", worst >= cfg.islandPathClearance - 1e-3f, worst.ToString("F3") + " m clear");
+
+            // The plane flying into one.
+            var first = FloatingIsland.Active[0];
+            int hits = plane.HitsTaken;
+            first.MoveTo(plane.Path.PositionAt(plane.Distance + plane.Speed * 0.4f) + Vector3.down * first.Size * 0.15f);
+            yield return WaitFor(() => first == null || plane.HitsTaken > hits || !plane.IsFlying, 2f);
+            yield return null;
+            Check("flying into an island hurts the plane", plane.HitsTaken > hits || plane.CurrentState == MiniPlane.State.Crashed, plane.HitsTaken + " hits");
+            Check("the island shatters", first == null);
+            IslandDebris.DestroyAll();
+            yield return null;
+
+            // A hand touching one.
+            int shattered = 0;
+            Action<FloatingIsland> onShatter = i => shattered++;
+            FloatingIsland.AnyShattered += onShatter;
+            var second = FloatingIsland.Active.Count > 0 ? FloatingIsland.Active[0] : null;
+            if (second != null) _left.PosePalm(second.Position);
+            yield return null;
+            yield return null;
+            Check("a hand touching an island shatters it", shattered == 1 && second == null);
+            int shards = IslandDebris.Active.Count;
+            Check("it breaks into several shards", shards >= 4, shards.ToString());
+            float fastest = 0f;
+            foreach (var d in IslandDebris.Active) fastest = Mathf.Max(fastest, d.Velocity.magnitude);
+            Check("the shards drift slowly", fastest > 0f && fastest < 0.12f, fastest.ToString("F3") + " m/s");
+            ParkHands();
+            yield return WaitSeconds(0.5f);
+
+            // A hand dusting a shard.
+            int dusted = 0;
+            Action<IslandDebris> onDust = d => dusted++;
+            IslandDebris.AnyDusted += onDust;
+            var shard = IslandDebris.Active.Count > 0 ? IslandDebris.Active[0] : null;
+            if (shard != null) _left.PosePalm(shard.Position);
+            yield return null;
+            yield return null;
+            Check("a hand turns a shard to dust", dusted >= 1 && shard == null, dusted + " dusted");
+            ParkHands();
+
+            // A shard drifting into the plane.
+            yield return WaitFor(() => plane.IsFlying, 6f);
+            yield return WaitSeconds(plane.respawnGraceSeconds + 0.2f);
+            var rock = IslandDebris.Active.Count > 0 ? IslandDebris.Active[0] : null;
+            hits = plane.HitsTaken;
+            if (rock != null)
+            {
+                rock.SetVelocity(Vector3.zero);
+                rock.transform.position = plane.Path.PositionAt(plane.Distance + plane.Speed * 0.3f);
+            }
+            yield return WaitFor(() => rock == null || plane.HitsTaken > hits || !plane.IsFlying, 2f);
+            Check("a shard hitting the plane hurts it", plane.HitsTaken > hits || plane.CurrentState == MiniPlane.State.Crashed, plane.HitsTaken + " hits");
+            FloatingIsland.AnyShattered -= onShatter;
+            IslandDebris.AnyDusted -= onDust;
+            Destroy(cfg);
+            yield return AbortToMenu();
+            Check("islands clear away with the level", FloatingIsland.Active.Count == 0 && IslandDebris.Active.Count == 0);
+        }
+
+        IEnumerator ZeppelinBoss()
+        {
+            Note("Zeppelin: level 7, bullet trails, fighters, palm-held missiles, Infinite boss waves");
+            Check("there are seven tutorial levels", _gm.levels.Count == 7, _gm.levels.Count.ToString());
+            var z7 = _gm.levels[6];
+            Check("level 7 is the zeppelin level, with missiles", z7.bossLevel > 0 && z7.bossMissiles, z7.levelName);
+            Check("level 7 opens once level 6 is passed", Progression.IsLevelUnlocked(6));
+            Check("Infinite doesn't wait for level 7", Progression.InfiniteUnlocked && !Progression.HasPassed(6));
+
+            var inf = _gm.infinite;
+            Check("every 5th wave is a boss wave", inf.BossNumber(5) == 1 && inf.BossNumber(10) == 2 && inf.BossNumber(4) == 0 && inf.BossNumber(6) == 0);
+            var w = ScriptableObject.CreateInstance<LevelConfig>();
+            inf.Apply(w, 5);
+            bool firstNoMissiles = w.bossLevel == 1 && !w.bossMissiles && w.maxFighters == 0 && w.maxBombers == 0;
+            int trails5 = w.bossTrails, batch5 = w.bossFighterBatch;
+            inf.Apply(w, 10);
+            bool secondMissiles = w.bossMissiles;
+            inf.Apply(w, 20);
+            Check("the first boss wave has bullets and fighters but no missiles", firstNoMissiles);
+            Check("the following boss waves add missiles", secondMissiles && w.bossMissiles);
+            Check("each boss wave is tougher", w.bossTrails > trails5 && w.bossFighterBatch > batch5 && w.bossMissileCount > 1,
+                "trails " + trails5 + " to " + w.bossTrails + ", fighters " + batch5 + " to " + w.bossFighterBatch + ", missiles " + w.bossMissileCount);
+            inf.Apply(w, 6);
+            Check("normal waves have no zeppelin", w.bossLevel == 0);
+            Destroy(w);
+
+            yield return StartAndWaitForFlight(6);
+            var plane = _gm.Plane;
+            var cfg = _gm.CurrentConfig;
+            var z = Zeppelin.Current;
+            Check("the zeppelin appears", z != null);
+            if (z == null)
+            {
+                yield return AbortToMenu();
+                yield break;
+            }
+            yield return WaitSeconds(z.arriveSeconds);
+            Check("it hangs in the distance", Vector3.Distance(z.Position, _head.position) > 1.5f, Vector3.Distance(z.Position, _head.position).ToString("F2") + " m");
+            Check("it can't be flicked or shot down", z.GetComponent<EnemyPlane>() == null);
+
+            // Parked test hands can't block, so the accurate trails would shoot the plane down for good.
+            plane.DebugInvulnerable = true;
+            yield return WaitFor(() => z.RoundsFired > 0, 8f);
+            Check("it fires bullet trails", z.RoundsFired > 0 && z.BarragesFired > 0);
+            // Each round's course, read from two frames, against where the plane's path takes it.
+            var firstSeen = new System.Collections.Generic.Dictionary<Projectile, Vector3>();
+            var miss = new System.Collections.Generic.Dictionary<Projectile, float>();
+            float watched = 0f;
+            while (watched < 3f)
+            {
+                if (plane.IsFlying)
+                    foreach (var p in Projectile.Active)
+                    {
+                        if (p == null || miss.ContainsKey(p)) continue;
+                        if (!firstSeen.TryGetValue(p, out var seen))
+                        {
+                            firstSeen[p] = p.Position;
+                            continue;
+                        }
+                        Vector3 v = (p.Position - seen) / Mathf.Max(Time.deltaTime, 1e-4f);
+                        float best = float.PositiveInfinity;
+                        for (float t = 0f; t < 4f; t += 0.01f)
+                            best = Mathf.Min(best, Vector3.Distance(p.Position + v * t, plane.Path.PositionAt(plane.Distance + plane.Speed * t)));
+                        miss[p] = best;
+                    }
+                watched += Time.deltaTime;
+                yield return null;
+            }
+            int near = 0;
+            foreach (var d in miss.Values) if (d < 0.1f) near++;
+            Check("most of the zeppelin's rounds are on course for the plane", miss.Count >= 6 && near >= miss.Count * 0.6f,
+                near + " of " + miss.Count + " pass within 10 cm");
+            yield return WaitSeconds(1f);
+            Check("its trails are streams of rounds", Projectile.Active.Count >= 3, Projectile.Active.Count.ToString());
+            var round = Projectile.Active.Count > 0 ? Projectile.Active[0] : null;
+            if (round != null) _left.PosePalm(round.Position);
+            yield return null;
+            yield return null;
+            Check("a hand blocks the zeppelin's bullets", round == null);
+            ParkHands();
+
+            yield return WaitFor(() => z.FighterBatches > 0, 25f);
+            yield return WaitSeconds(cfg.bossFighterBatch * 0.5f + 0.3f);
+            Check("it launches a batch of fighters from its decks", z.FighterBatches > 0 && EnemyPlane.Active.Count >= cfg.bossFighterBatch,
+                EnemyPlane.Active.Count + " fighters");
+            foreach (var e in EnemyPlane.Active.ToArray())
+                if (e != null && e.IsAlive) e.Flick(Vector3.up);
+
+            // A missile held in the palm drops.
+            yield return WaitFor(() => plane.IsFlying, 6f);
+            int score = _gm.Score;
+            var m = z.LaunchMissile();
+            yield return WaitSeconds(0.5f);
+            Vector3 toPlane = (plane.Position - m.Position).normalized;
+            Check("a missile homes on the plane", Vector3.Dot(m.Forward, toPlane) > 0.5f, Vector3.Dot(m.Forward, toPlane).ToString("F2"));
+            HandMotion.Reset(_right);
+            Vector3 heldAt = m.Position;
+            for (int i = 0; i < 10; i++)
+            {
+                _right.PosePalm(heldAt);
+                yield return null;
+            }
+            Check("a palm holds a missile still", m != null && m.IsHeld && Vector3.Distance(m.Position, heldAt) < 0.005f);
+            float held = 0f;
+            while (m != null && m.IsAlive && held < 2.5f)
+            {
+                _right.PosePalm(heldAt);
+                held += Time.deltaTime;
+                yield return null;
+            }
+            Check("holding it about 1.5 s drops it", m != null && m.CurrentState == BossMissile.State.Falling && held > 1.2f && held < 1.7f,
+                held.ToString("F2") + " s");
+            Check("a dropped missile scores", _gm.Score == score + _gm.missileDefusePoints, "score " + _gm.Score + " from " + score);
+            ParkHands();
+            yield return WaitSeconds(0.2f);
+
+            // A smacked missile goes off; far from the plane that's harmless.
+            int blasts = 0;
+            Action<BossMissile> onBlast = b => blasts++;
+            BossMissile.AnyExploded += onBlast;
+            var m2 = z.LaunchMissile();
+            yield return WaitSeconds(0.4f);
+            int hits = plane.HitsTaken;
+            bool flyingBefore = plane.IsFlying;
+            HandMotion.Reset(_right);
+            _right.PosePalm(m2.Position + Vector3.right * 0.2f);
+            yield return null;
+            for (int i = 0; i < 6 && m2 != null && m2.IsAlive; i++)
+            {
+                _right.PosePalm(m2.Position + Vector3.right * (0.12f - 0.04f * i));
+                yield return null;
+            }
+            yield return null;
+            Check("smacking a missile sets it off", blasts == 1 && m2 == null, "blasts " + blasts);
+            Check("a blast far from the plane does no harm", !flyingBefore || (plane.HitsTaken == hits && plane.IsFlying));
+            ParkHands();
+
+            // A missile reaching the plane.
+            plane.DebugInvulnerable = false;
+            yield return WaitFor(() => plane.IsFlying, 6f);
+            // Keep the zeppelin's rounds out of it, so a stray hit's grace doesn't swallow the blast.
+            float clear = 0f;
+            while (clear < Mathf.Max(plane.hitGraceSeconds, plane.respawnGraceSeconds) + 0.2f)
+            {
+                Projectile.DestroyAll();
+                clear += Time.deltaTime;
+                yield return null;
+            }
+            hits = plane.HitsTaken;
+            int hurt = 0;
+            Action<MiniPlane> onShield = pl => hurt++;
+            Action<MiniPlane, string> onHurt = (pl, r) => hurt++;
+            plane.ShieldLost += onShield;
+            plane.Hit += onHurt;
+            plane.Crashed += onHurt;
+            var m3 = z.LaunchMissile();
+            Vector3 ahead = plane.Path.PositionAt(plane.Distance + 0.12f);
+            m3.SetCourse(ahead, plane.Position - ahead);
+            float flown = 0f;
+            while (m3 != null && hurt == 0 && plane.IsFlying && flown < 3f)
+            {
+                Projectile.DestroyAll();
+                flown += Time.deltaTime;
+                yield return null;
+            }
+            Check("a missile reaching the plane hurts it", hurt > 0 || plane.HitsTaken > hits, plane.HitsTaken + " hits");
+            plane.ShieldLost -= onShield;
+            plane.Hit -= onHurt;
+            plane.Crashed -= onHurt;
+            BossMissile.AnyExploded -= onBlast;
+            yield return AbortToMenu();
+            Check("the zeppelin leaves with the level", Zeppelin.Current == null && BossMissile.Active.Count == 0);
+            plane.DebugInvulnerable = false;
+        }
+
+        IEnumerator InfinitePowerups()
+        {
+            Note("Infinite: fuel from wave 1, fewer powerups, rare turret balloons, at most 3 tubes a wave");
+            var inf = _gm.infinite;
+            var w = ScriptableObject.CreateInstance<LevelConfig>();
+            inf.Apply(w, 1);
+            Check("fuel is on from wave 1", w.useFuel);
+            int turretWaves = 0, shieldWaves = 0;
+            bool tubesOk = true, earlyOk = true, shieldsOk = true;
+            for (int wave = 1; wave <= 20; wave++)
+            {
+                inf.Apply(w, wave);
+                if (w.maxTurretBalloons > 0) turretWaves++;
+                if (w.useBalloons && w.maxShieldBalloons != 0) shieldWaves++;
+                shieldsOk &= w.maxShieldBalloons >= 0 && w.maxShieldBalloons <= 2 && w.maxTurretBalloons <= 1;
+                tubesOk &= w.maxBoosterTubes >= 0 && w.maxBoosterTubes <= 3;
+                if (wave <= 5) earlyOk &= w.maxBoosterTubes >= 1 && w.maxBoosterTubes <= 2;
+            }
+            Check("balloons are capped per wave", shieldsOk);
+            Check("the turret balloon is rarer than the shield", turretWaves > 0 && turretWaves * 2 <= shieldWaves, turretWaves + " turret waves, " + shieldWaves + " shield waves");
+            Check("at most 3 tubes a wave", tubesOk);
+            Check("1 or 2 tubes in the first 5 waves", earlyOk);
+
+            // The spawner keeps to the caps however quickly its timers run.
+            inf.Apply(w, 6);
+            w.boosterTubeInterval = 0.4f;
+            w.shieldBalloonInterval = 0.4f;
+            w.turretBalloonInterval = 0.4f;
+            w.maxTurretBalloons = 1;
+            w.maxFighters = 0;
+            w.maxBombers = 0;
+            w.SetBoss(0, false);
+            _gm.spawner.Begin(w, _gm.Plane, Vector3.forward, 5);
+            yield return WaitSeconds(4f);
+            int tubes = BoosterTube.Active.Count;
+            int shields = PowerBalloon.Active.FindAll(b => b != null && b.Kind == BalloonKind.Shield).Count;
+            int turrets = PowerBalloon.Active.FindAll(b => b != null && b.Kind == BalloonKind.Turret).Count;
+            Check("the spawner stops at the tube cap", tubes == w.maxBoosterTubes, tubes + " of " + w.maxBoosterTubes);
+            Check("the spawner stops at the balloon caps", shields == w.maxShieldBalloons && turrets == 1, shields + " shields, " + turrets + " turrets");
+            _gm.spawner.End();
+            Destroy(w);
+            yield return null;
         }
     }
 }
