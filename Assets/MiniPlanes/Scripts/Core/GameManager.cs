@@ -5,9 +5,10 @@ using UnityEngine;
 namespace MiniPlanes
 {
     /// <summary>
-    /// Top-level game flow: start panel, the six tutorial levels with their intro page and unlocks, the
-    /// Infinite wave mode, lives and respawns, pause, and the scoring and coins that tie rings, flicks,
-    /// turrets, bomb covers, fuel and the HUD together.
+    /// Top-level game flow: start panel, the tutorial levels with their intro page and unlocks, the Infinite
+    /// wave mode with its islands and boss waves, lives and respawns, pause, plane perks, and the scoring and
+    /// coins that tie rings, flicks, turrets, bomb covers, missiles, fuel and the HUD together. Coins are only
+    /// earned in Infinite, plus a one-off reward for clearing each tutorial level the first time.
     /// </summary>
     [DefaultExecutionOrder(-10)]
     public class GameManager : MonoBehaviour
@@ -47,14 +48,20 @@ namespace MiniPlanes
         public int bomberFlickPoints = 4;
         [Tooltip("Points when the turret shoots an enemy down.")]
         public int turretKillPoints = 1;
+        [Tooltip("Points for holding a zeppelin missile until it drops.")]
+        public int missileDefusePoints = 2;
 
-        [Header("Coins (saved, spent in the Hangar)")]
+        [Header("Coins (saved, spent in the Hangar; earned in Infinite only)")]
+        [Tooltip("Paid once per tutorial level, the first time it is passed. Tutorials pay nothing else, so replaying them can't farm coins.")]
+        public int tutorialFirstClearCoins = 5;
         public int singleRingCoins = 2;
         public int mergedRingCoins = 1;
         [Tooltip("For any enemy plane knocked out of the sky, by hand or turret.")]
         public int enemyCoins = 1;
         [Tooltip("For cupping a flashing bomb balloon until it is contained.")]
-        public int bombCoverCoins = 2;
+        public int bombCoverCoins = 5;
+        [Tooltip("For holding a zeppelin missile until it drops.")]
+        public int missileCoins = 1;
 
         [Header("Timing")]
         [Tooltip("Seconds between a flight ending and the result panel appearing.")]
@@ -85,6 +92,9 @@ namespace MiniPlanes
         public int CoinsThisRun { get; private set; }
         public MiniPlane Plane => _plane;
         public LevelConfig CurrentConfig => _cfg;
+        public IslandField Islands => _islands;
+        /// <summary>The coins the last tutorial pass paid for a first clear, or 0.</summary>
+        public int LastFirstClearCoins { get; private set; }
 
         MiniPlane _plane;
         LevelConfig _cfg;
@@ -92,6 +102,8 @@ namespace MiniPlanes
         int _seed;
         Coroutine _flow;
         bool _startPressed;
+        IslandField _islands;
+        bool _perkTurretPending;
 
         void Awake()
         {
@@ -154,6 +166,16 @@ namespace MiniPlanes
                     if (f != null) f.Flicked += OnEnemyFlicked;
             PlaneTurret.AnyEnemyDowned += OnTurretKill;
             BombBalloon.AnyContained += OnBombContained;
+            BossMissile.AnyDefused += OnMissileDefused;
+            if (spawner != null)
+            {
+                spawner.EnemySpawned += OnEnemySpawned;
+                spawner.ZeppelinSpawned += z => z.AttackStarted += OnBossAttack;
+            }
+
+            _islands = new GameObject("Islands").AddComponent<IslandField>();
+            _islands.transform.SetParent(transform, false);
+            _islands.Init(art, spawner != null ? spawner.hands : null, _plane);
 
             if (menu != null)
             {
@@ -181,6 +203,7 @@ namespace MiniPlanes
         {
             PlaneTurret.AnyEnemyDowned -= OnTurretKill;
             BombBalloon.AnyContained -= OnBombContained;
+            BossMissile.AnyDefused -= OnMissileDefused;
             if (IsPaused) Time.timeScale = 1f;
             IsPaused = false;
         }
@@ -304,6 +327,7 @@ namespace MiniPlanes
         {
             if (spawner != null) spawner.End();
             if (revealer != null) revealer.End();
+            if (_islands != null) _islands.Clear();
             _plane.RemoveTurret();
         }
 
@@ -350,7 +374,16 @@ namespace MiniPlanes
             bool enoughRings = RingsThisFlight >= _cfg.requiredRingPasses;
             LastFlightPassed = finished && enoughRings;
 
-            if (LastFlightPassed) Progression.MarkPassed(index);
+            LastFirstClearCoins = 0;
+            if (LastFlightPassed)
+            {
+                if (!Progression.HasPassed(index))
+                {
+                    LastFirstClearCoins = tutorialFirstClearCoins;
+                    GrantCoins(tutorialFirstClearCoins);
+                }
+                Progression.MarkPassed(index);
+            }
 
             yield return new WaitForSeconds(resultDelaySeconds);
             Clean();
@@ -363,9 +396,12 @@ namespace MiniPlanes
             string nextLabel = hasNext ? "NEXT" : "MENU";
             if (LastFlightPassed)
             {
-                detail = !hasNext
-                    ? "Every tutorial level passed.\nInfinite mode is now unlocked."
-                    : "Level " + (index + 2) + " is unlocked.";
+                detail = index + 1 == Progression.LevelsForInfinite
+                    ? "Infinite mode is unlocked, and so is the Zeppelin level."
+                    : !hasNext
+                        ? "You beat the zeppelin!"
+                        : "Level " + (index + 2) + " is unlocked.";
+                if (LastFirstClearCoins > 0) detail += "\nFirst clear: +" + LastFirstClearCoins + " coins.";
             }
             else if (!finished)
             {
@@ -399,7 +435,8 @@ namespace MiniPlanes
             {
                 Wave++;
                 infinite.Apply(_waveConfig, Wave);
-                yield return Flight(_waveConfig, "W " + Wave, "WAVE " + Wave, Wave > 1, false);
+                string waveIntro = _waveConfig.bossLevel > 0 ? "BOSS WAVE " + Wave + "\nThe zeppelin can't be destroyed. Survive it!" : "WAVE " + Wave;
+                yield return Flight(_waveConfig, "W " + Wave, waveIntro, Wave > 1, false);
                 alive = _plane.CurrentState == MiniPlane.State.Finished;
                 if (alive) AddCoins(infinite.coinsPerWave);
                 if (spawner != null) spawner.End();
@@ -438,6 +475,8 @@ namespace MiniPlanes
             var path = FlightPathGenerator.Build(cfg, headPos, headFwd, _seed);
             _plane.PrepareAtStart(path, cfg, keepShield);
             if (revealer != null) revealer.Begin(path, cfg, _plane);
+            if (_islands != null) _islands.Build(cfg, path, headPos, headFwd, _seed);
+            _perkTurretPending = false;
 
             if (hud != null)
             {
@@ -483,8 +522,15 @@ namespace MiniPlanes
 
             _plane.TakeOff();
             if (revealer != null) revealer.OnTakeOff();
-            if (spawner != null) spawner.Begin(cfg, _plane, headFwd, _seed);
             CurrentFlow = Flow.Flying;
+            var def = _plane.Definition;
+            _perkTurretPending = def != null && def.perk == PlanePerk.WaveTurret;
+            if (def != null && def.perk == PlanePerk.WaveBoost)
+            {
+                _plane.Boost(def.perkBoostSeconds, def.perkBoostMultiplier);
+                if (hud != null) hud.SetCaption("BOOST!", 1.2f);
+            }
+            if (spawner != null) spawner.Begin(cfg, _plane, headFwd, _seed);
 
             while (true)
             {
@@ -561,6 +607,33 @@ namespace MiniPlanes
             AddCoins(bombCoverCoins);
         }
 
+        void OnMissileDefused(BossMissile missile)
+        {
+            if (CurrentFlow != Flow.Flying) return;
+            AddScore(missileDefusePoints, missile.Position);
+            AddCoins(missileCoins);
+        }
+
+        /// <summary>The Bluebird fits its own turret when the first enemy plane of the wave appears.</summary>
+        void OnEnemySpawned(EnemyPlane enemy)
+        {
+            if (!_perkTurretPending || CurrentFlow != Flow.Flying || !_plane.IsFlying) return;
+            _perkTurretPending = false;
+            _plane.EquipTurret(_cfg);
+            if (hud != null) hud.SetCaption("TURRET READY", 1.2f);
+        }
+
+        void OnBossAttack(Zeppelin zeppelin, Zeppelin.Attack attack)
+        {
+            if (hud == null || CurrentFlow != Flow.Flying) return;
+            switch (attack)
+            {
+                case Zeppelin.Attack.Barrage: hud.SetCaption("BULLET TRAILS! Block them with your hands", 2f); break;
+                case Zeppelin.Attack.Fighters: hud.SetCaption("FIGHTERS LAUNCHING! Flick them away", 2f); break;
+                case Zeppelin.Attack.Missiles: hud.SetCaption("MISSILES! Hold one in your palm until it drops", 2.5f); break;
+            }
+        }
+
         void AddScore(int points, Vector3 at)
         {
             Score += points;
@@ -569,7 +642,14 @@ namespace MiniPlanes
             else if (points > 1) ComicVfx.Play(ComicKind.Plus2, at + Vector3.up * 0.05f);
         }
 
+        /// <summary>Coins for something done in play. Only Infinite pays them, so tutorials can't be farmed.</summary>
         void AddCoins(int coins)
+        {
+            if (!InInfinite) return;
+            GrantCoins(coins);
+        }
+
+        void GrantCoins(int coins)
         {
             if (coins <= 0) return;
             Progression.AddCoins(coins);
