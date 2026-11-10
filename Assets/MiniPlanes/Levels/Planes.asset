@@ -19,6 +19,9 @@ MonoBehaviour:
     model: {fileID: 919132149155446097, guid: df0312f1c5a6f8d449f03b86be5fdca1, type: 3}
     material: {fileID: 2100000, guid: 026b7e4d09ea6d24eaaef4a0d563cf8e, type: 2}
     price: 0
+    perk: 0
+    perkBoostSeconds: 3
+    perkBoostMultiplier: 1.6
     turretMount: {x: 0, y: 0.17, z: -0.12}
     palettes:
     - name: Original
@@ -47,10 +50,13 @@ MonoBehaviour:
       onlyHue: -1
   - id: biplane
     displayName: Bluebird
-    description: A stacked-wing classic.
+    description: Fits its own turret when each wave's first enemy shows up.
     model: {fileID: 919132149155446097, guid: 75ff38478ec8181499a23cd83e33c0a1, type: 3}
     material: {fileID: 2100000, guid: bb9800a469f37f945986c91d930ff9ab, type: 2}
     price: 500
+    perk: 1
+    perkBoostSeconds: 3
+    perkBoostMultiplier: 1.6
     turretMount: {x: 0, y: 0.17, z: 0.02}
     palettes:
     - name: Original
@@ -79,10 +85,13 @@ MonoBehaviour:
       onlyHue: -1
   - id: pusher
     displayName: Pusher Racer
-    description: Twin booms, rear propeller, fast lines.
+    description: Boosts for 3 seconds at the start of every wave.
     model: {fileID: 919132149155446097, guid: f4de9af1ef39c484898af0c770aec73b, type: 3}
     material: {fileID: 2100000, guid: 0df72ee5a4710a84185f87d458365581, type: 2}
     price: 1000
+    perk: 2
+    perkBoostSeconds: 3
+    perkBoostMultiplier: 1.6
     turretMount: {x: 0, y: 0.09, z: 0.33}
     palettes:
     - name: Original
@@ -109,3 +118,4 @@ MonoBehaviour:
       saturation: 1
       brightness: 1
       onlyHue: -1
+  version: 3

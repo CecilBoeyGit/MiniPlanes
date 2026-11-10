@@ -6,7 +6,8 @@ namespace MiniPlanes
 {
     /// <summary>
     /// The player's plane: follows the path at constant speed, banks into turns, burns fuel, carries a
-    /// one-hit shield and an optional turret, takes hits and tumbles out of the sky when it crashes. After
+    /// one-hit shield and an optional turret, can boost for a few seconds, takes hits and tumbles out of the
+    /// sky when it crashes. After
     /// a crash it can respawn where it fell, if the level has lives left.
     /// </summary>
     public class MiniPlane : MonoBehaviour
@@ -27,6 +28,8 @@ namespace MiniPlanes
         public float respawnGraceSeconds = 2.5f;
         [Tooltip("Turret size, as a fraction of the wingspan.")]
         public float turretSizePerSpan = 0.22f;
+        [Tooltip("How fast a boost ramps the speed up and back down, in multiplier per second.")]
+        public float boostRampPerSecond = 4f;
 
         public float Radius { get; private set; } = 0.01f;
         public State CurrentState { get; private set; } = State.Idle;
@@ -35,7 +38,12 @@ namespace MiniPlanes
         /// <summary>The way the nose points.</summary>
         public Vector3 Forward => transform.forward;
         public Vector3 Velocity { get; private set; }
-        public float Speed { get; private set; }
+        /// <summary>Current speed along the path, including any boost.</summary>
+        public float Speed => BaseSpeed * SpeedMultiplier;
+        /// <summary>The level's speed for this plane, without boosts.</summary>
+        public float BaseSpeed { get; private set; }
+        public float SpeedMultiplier { get; private set; } = 1f;
+        public bool IsBoosting => _boostLeft > 0f;
         public float Distance { get; private set; }
         public CatmullRomPath Path { get; private set; }
         public float Progress => Path == null || Path.Length <= 0f ? 0f : Mathf.Clamp01(Distance / Path.Length);
@@ -52,6 +60,8 @@ namespace MiniPlanes
         public PlaneDefinition Definition { get; private set; }
         /// <summary>The crash animation has finished and the plane can respawn.</summary>
         public bool CrashSettled => CurrentState == State.Crashed && _crashRoutine == null;
+        /// <summary>For automated tests: nothing can hurt the plane while set.</summary>
+        public bool DebugInvulnerable { get; set; }
 
         public event Action<MiniPlane> Finished;
         public event Action<MiniPlane, string> Crashed;
@@ -73,6 +83,9 @@ namespace MiniPlanes
         float _shieldGrace = 1f;
         Coroutine _crashRoutine;
         bool _visible;
+        float _boostLeft;
+        float _boostMultiplier = 1f;
+        TrailRenderer _trail;
 
         public void SetHead(Transform head) { _head = head; }
 
@@ -107,6 +120,25 @@ namespace MiniPlanes
                 gauge.name = "FuelGauge";
                 _gauge = gauge.GetComponent<FuelGaugeView>();
                 gauge.SetActive(false);
+            }
+            if (art != null && art.boostTrail != null)
+            {
+                var trailGo = new GameObject("BoostTrail");
+                trailGo.transform.SetParent(transform, false);
+                trailGo.transform.localPosition = Vector3.back * (wingspan * 0.4f);
+                _trail = trailGo.AddComponent<TrailRenderer>();
+                _trail.sharedMaterial = art.boostTrail;
+                _trail.time = 0.45f;
+                _trail.minVertexDistance = 0.004f;
+                _trail.widthCurve = new AnimationCurve(new Keyframe(0f, wingspan * 0.5f), new Keyframe(1f, 0f));
+                var gradient = new Gradient();
+                gradient.SetKeys(
+                    new[] { new GradientColorKey(new Color(1f, 0.95f, 0.7f), 0f), new GradientColorKey(new Color(1f, 0.55f, 0.2f), 1f) },
+                    new[] { new GradientAlphaKey(0.9f, 0f), new GradientAlphaKey(0f, 1f) });
+                _trail.colorGradient = gradient;
+                _trail.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                _trail.receiveShadows = false;
+                _trail.emitting = false;
             }
             SetVisible(false);
         }
@@ -158,7 +190,8 @@ namespace MiniPlanes
             StopCrash();
             _cfg = cfg;
             Path = path;
-            Speed = cfg.planeSpeed;
+            BaseSpeed = cfg.planeSpeed;
+            ResetBoost();
             Distance = 0f;
             _bank = 0f;
             HitsTaken = 0;
@@ -251,6 +284,11 @@ namespace MiniPlanes
             float dt = Time.deltaTime;
             if (dt <= 0f) return;
 
+            if (_boostLeft > 0f) _boostLeft = Mathf.Max(0f, _boostLeft - dt);
+            float wantMultiplier = _boostLeft > 0f ? _boostMultiplier : 1f;
+            SpeedMultiplier = Mathf.MoveTowards(SpeedMultiplier, wantMultiplier, boostRampPerSecond * dt);
+            if (_trail != null) _trail.emitting = SpeedMultiplier > 1.05f && _visible;
+
             Distance += Speed * dt;
             Vector3 pos = Path.PositionAt(Distance);
             Vector3 tangent = Path.TangentAt(Distance);
@@ -326,10 +364,36 @@ namespace MiniPlanes
             HasShield = true;
         }
 
-        /// <summary>Fits the automatic turret for the rest of the flight. Fitting it again does nothing.</summary>
+        /// <summary>Speeds the plane up by a multiplier for some seconds. A longer or stronger boost wins.</summary>
+        public void Boost(float seconds, float multiplier)
+        {
+            if (seconds <= 0f || multiplier <= 1f) return;
+            _boostMultiplier = IsBoosting ? Mathf.Max(_boostMultiplier, multiplier) : multiplier;
+            _boostLeft = Mathf.Max(_boostLeft, seconds);
+        }
+
+        void ResetBoost()
+        {
+            _boostLeft = 0f;
+            _boostMultiplier = 1f;
+            SpeedMultiplier = 1f;
+            if (_trail != null)
+            {
+                _trail.emitting = false;
+                _trail.Clear();
+            }
+        }
+
+        /// <summary>
+        /// Fits the automatic turret for the level's turret time. Fitting it while one is on restarts its time.
+        /// </summary>
         public PlaneTurret EquipTurret(LevelConfig cfg)
         {
-            if (_turret != null) return _turret;
+            if (_turret != null)
+            {
+                _turret.Refresh();
+                return _turret;
+            }
             var go = new GameObject("Turret");
             go.transform.SetParent(transform, false);
             go.transform.localPosition = TurretMount;
@@ -352,7 +416,7 @@ namespace MiniPlanes
         /// </summary>
         public bool Damage(string reason)
         {
-            if (!IsFlying || Time.time < _graceUntil) return false;
+            if (!IsFlying || Time.time < _graceUntil || DebugInvulnerable) return false;
 
             if (HasShield)
             {
@@ -381,6 +445,7 @@ namespace MiniPlanes
             if (!IsFlying) return;
             CurrentState = State.Crashed;
             LastCrashReason = reason;
+            ResetBoost();
             _crashRoutine = StartCoroutine(CrashRoutine());
             Crashed?.Invoke(this, reason);
         }

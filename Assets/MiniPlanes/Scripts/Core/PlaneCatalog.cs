@@ -18,6 +18,14 @@ namespace MiniPlanes
         public float onlyHue = -1f;
     }
 
+    /// <summary>What a plane does on its own, beyond flying.</summary>
+    public enum PlanePerk
+    {
+        [Tooltip("Nothing extra.")] None,
+        [Tooltip("Fits its own turret when the first enemy plane of each wave shows up.")] WaveTurret,
+        [Tooltip("Boosts for a few seconds at the start of each wave.")] WaveBoost
+    }
+
     /// <summary>One plane the player can fly.</summary>
     [Serializable]
     public class PlaneDefinition
@@ -31,6 +39,11 @@ namespace MiniPlanes
         public Material material;
         [Tooltip("Coins to unlock. 0 means owned from the start.")]
         public int price;
+        public PlanePerk perk = PlanePerk.None;
+        [Tooltip("For the WaveBoost perk: seconds of boost at the start of each wave.")]
+        public float perkBoostSeconds = 3f;
+        [Tooltip("For the WaveBoost perk: speed multiplier while boosting.")]
+        public float perkBoostMultiplier = 1.6f;
         [Tooltip("Where the turret sits, in wingspans from the model's centre: x right, y up, z forward.")]
         public Vector3 turretMount = new Vector3(0f, 0.16f, -0.08f);
         [Tooltip("The plane's colour palettes. The first is the original.")]
@@ -45,6 +58,8 @@ namespace MiniPlanes
     public class PlaneCatalog : ScriptableObject
     {
         public PlaneDefinition[] planes = new PlaneDefinition[0];
+        [HideInInspector, Tooltip("Lets the scene builder add new fields' starter values once, keeping your edits.")]
+        public int version;
 
         public int Count => planes != null ? planes.Length : 0;
 
