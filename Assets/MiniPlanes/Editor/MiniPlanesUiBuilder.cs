@@ -55,7 +55,12 @@ namespace MiniPlanes.Editor
 
             return new Prefabs
             {
-                menu = Ensure("MenuPanel", BuildMenu),
+                // Rebuilt once if it predates a level: the list needs a row for every level.
+                menu = Ensure("MenuPanel", BuildMenu, existing =>
+                {
+                    var m = existing.GetComponent<MenuPanel>();
+                    return m == null || m.levelRows == null || m.levelRows.Length < Progression.TutorialLevelCount;
+                }),
                 hud = Ensure("CockpitHUD", BuildHud),
                 pause = Ensure("PausePanel", BuildPause),
                 wrist = Ensure("WristMenuButton", BuildWrist),
@@ -67,11 +72,12 @@ namespace MiniPlanes.Editor
             };
         }
 
-        static GameObject Ensure(string name, Func<GameObject> build)
+        static GameObject Ensure(string name, Func<GameObject> build, Func<GameObject, bool> outdated = null)
         {
             string path = PrefabDir + "/" + name + ".prefab";
             var existing = AssetDatabase.LoadAssetAtPath<GameObject>(path);
-            if (existing != null) return existing;
+            if (existing != null && (outdated == null || !outdated(existing))) return existing;
+            if (existing != null) Debug.LogWarning("[MiniPlanes] Rebuilding outdated UI prefab " + path + " (it lacks parts the game now needs).");
             var go = build();
             foreach (var curved in go.GetComponentsInChildren<CurvedCanvas>(true)) curved.EnsureEffects();
             var prefab = PrefabUtility.SaveAsPrefabAsset(go, path);

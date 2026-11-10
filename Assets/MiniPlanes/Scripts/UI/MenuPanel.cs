@@ -93,7 +93,9 @@ namespace MiniPlanes
         public Color muted = new Color(0.56f, 0.52f, 0.47f, 1f);
         public Color good = new Color(0.16f, 0.44f, 0.41f, 1f);
         public Color bad = new Color(0.8f, 0.36f, 0.28f, 1f);
-        public Color lockedPreviewTint = new Color(0.25f, 0.25f, 0.28f, 1f);
+        [Tooltip("The Buy button when the player can't afford the plane.")]
+        public Color actionUnavailable = new Color(0.72f, 0.72f, 0.72f, 1f);
+        public Color actionUnavailableText = new Color(0.47f, 0.47f, 0.47f, 1f);
 
         public event Action<int> LevelChosen;
         public event Action InfiniteChosen;
@@ -119,6 +121,7 @@ namespace MiniPlanes
         void Awake()
         {
             if (poke != null) poke.Clicked += OnClicked;
+            if (planeAction != null) planeAction.disabledColor = actionUnavailable;
             Close();
         }
 
@@ -246,7 +249,7 @@ namespace MiniPlanes
                 var row = levelRows[i];
                 if (row == null || row.button == null) continue;
                 bool unlocked = Progression.IsLevelUnlocked(i);
-                bool passed = i + 1 < Progression.UnlockedLevels || Progression.InfiniteUnlocked;
+                bool passed = Progression.HasPassed(i) || (Progression.UnlockAllOverride && i + 1 < Progression.UnlockedLevels);
                 string name = _levels != null && i < _levels.Count && _levels[i] != null ? _levels[i].levelName : "Level " + (i + 1);
                 SetText(row.number, (i + 1).ToString());
                 SetText(row.name, unlocked ? name : "Level " + (i + 1));
@@ -307,6 +310,7 @@ namespace MiniPlanes
                 bool canAfford = Progression.Coins >= def.price;
                 planeAction.Interactable = owned ? !flying : canAfford;
                 SetText(planeActionLabel, owned ? (flying ? "FLYING" : "FLY THIS") : canAfford ? "BUY  " + def.price : "NEED " + def.price);
+                if (planeActionLabel != null) planeActionLabel.color = planeAction.Interactable ? Color.white : actionUnavailableText;
             }
 
             if (palettePanel != null) palettePanel.SetActive(owned);
@@ -325,7 +329,8 @@ namespace MiniPlanes
             SetText(paletteName, def.palettes != null && palette < def.palettes.Length ? def.palettes[palette].name : "");
             if (palettePanel != null) CurvedCanvas.MarkDirty(palettePanel.transform);
 
-            ShowPreview(def, owned ? palette : -1);
+            // Locked planes show in their original paint: only the Buy button greys out.
+            ShowPreview(def, owned ? palette : 0);
         }
 
         void ShowPreview(PlaneDefinition def, int palette)
@@ -341,8 +346,6 @@ namespace MiniPlanes
             _preview = holder.gameObject;
             if (palette >= 0 && def.palettes != null && palette < def.palettes.Length)
                 PlanePaint.Apply(_preview, def.palettes[palette]);
-            else
-                PlanePaint.Apply(_preview, new PlanePalette { saturation = 0.15f, brightness = 0.55f });
         }
 
         void ClearPreview()
