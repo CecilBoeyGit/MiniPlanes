@@ -118,4 +118,39 @@ MonoBehaviour:
       saturation: 1
       brightness: 1
       onlyHue: -1
-  version: 3
+  - id: jet
+    displayName: Supersonic
+    description: Twin turrets each wave, and a boost at every wave start.
+    model: {fileID: 919132149155446097, guid: 647c1916d8730ba44831ce12be924f49, type: 3}
+    material: {fileID: 2100000, guid: fd228e07432eb494dbfb24c59c6c2f11, type: 2}
+    price: 2000
+    perk: 7
+    perkBoostSeconds: 3
+    perkBoostMultiplier: 1.6
+    turretMount: {x: 0.165, y: 0.075, z: -0.05}
+    palettes:
+    - name: Original
+      swatch: {r: 0.17, g: 0.37, b: 0.48, a: 1}
+      hueShift: 0
+      saturation: 1
+      brightness: 1
+      onlyHue: -1
+    - name: Ember
+      swatch: {r: 0.82, g: 0.32, b: 0.26, a: 1}
+      hueShift: 0.44
+      saturation: 1.05
+      brightness: 1.15
+      onlyHue: -1
+    - name: Forest
+      swatch: {r: 0.26, g: 0.52, b: 0.34, a: 1}
+      hueShift: -0.18
+      saturation: 1
+      brightness: 1.05
+      onlyHue: -1
+    - name: Royal
+      swatch: {r: 0.42, g: 0.32, b: 0.72, a: 1}
+      hueShift: 0.15
+      saturation: 1
+      brightness: 1.05
+      onlyHue: -1
+  version: 4

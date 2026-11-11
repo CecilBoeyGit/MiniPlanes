@@ -50,6 +50,9 @@ namespace MiniPlanes
         public bool HasShield { get; private set; }
         public bool HasTurret => _turret != null;
         public PlaneTurret Turret => _turret;
+        /// <summary>The second turret, for planes with twin turrets.</summary>
+        public PlaneTurret TwinTurret => _twin;
+        public int TurretCount => (_turret != null ? 1 : 0) + (_twin != null ? 1 : 0);
         public int HitsTaken { get; private set; }
         public bool FuelEnabled { get; private set; }
         public float Fuel { get; private set; }
@@ -76,6 +79,7 @@ namespace MiniPlanes
         MeshRenderer _shieldRenderer;
         FuelGaugeView _gauge;
         PlaneTurret _turret;
+        PlaneTurret _twin;
         LevelConfig _cfg;
         Vector3 _prevTangent = Vector3.forward;
         float _bank;
@@ -178,7 +182,12 @@ namespace MiniPlanes
             _modelRenderers = _modelRoot.GetComponentsInChildren<Renderer>(true);
             foreach (var r in _modelRenderers) if (r != null) r.enabled = _visible;
             if (_turret != null) _turret.transform.localPosition = TurretMount;
+            if (_twin != null) _twin.transform.localPosition = Mirror(TurretMount);
         }
+
+        bool HasTwinTurrets => Definition != null && Definition.Has(PlanePerk.TwinTurrets);
+
+        static Vector3 Mirror(Vector3 v) => new Vector3(-v.x, v.y, v.z);
 
         Vector3 TurretMount => (Definition != null ? Definition.turretMount : new Vector3(0f, 0.16f, -0.08f)) * wingspan;
 
@@ -270,6 +279,7 @@ namespace MiniPlanes
             _visible = visible;
             foreach (var r in _modelRenderers) if (r != null) r.enabled = visible;
             if (_turret != null) _turret.gameObject.SetActive(visible);
+            if (_twin != null) _twin.gameObject.SetActive(visible);
             if (!visible)
             {
                 if (_shieldRenderer != null) _shieldRenderer.enabled = false;
@@ -413,24 +423,39 @@ namespace MiniPlanes
             if (_turret != null)
             {
                 _turret.Refresh();
+                if (_twin != null) _twin.Refresh();
                 Sfx.Play(SoundKind.TurretOn, transform.position);
                 return _turret;
             }
-            var go = new GameObject("Turret");
-            go.transform.SetParent(transform, false);
-            go.transform.localPosition = TurretMount;
-            _turret = go.AddComponent<PlaneTurret>();
-            _turret.Setup(this, cfg, _art, wingspan * turretSizePerSpan);
+            _turret = MakeTurret("Turret", TurretMount, cfg);
+            if (HasTwinTurrets)
+            {
+                _twin = MakeTurret("TwinTurret", Mirror(TurretMount), cfg);
+                _turret.Partner = _twin;
+                _twin.Partner = _turret;
+            }
             Sfx.Play(SoundKind.TurretOn, transform.position);
-            go.SetActive(_visible);
             return _turret;
         }
 
+        PlaneTurret MakeTurret(string name, Vector3 mount, LevelConfig cfg)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(transform, false);
+            go.transform.localPosition = mount;
+            var turret = go.AddComponent<PlaneTurret>();
+            turret.Setup(this, cfg, _art, wingspan * turretSizePerSpan);
+            go.SetActive(_visible);
+            return turret;
+        }
+
+        /// <summary>Takes the turret off, and its twin with it.</summary>
         public void RemoveTurret()
         {
-            if (_turret == null) return;
-            Destroy(_turret.gameObject);
+            if (_turret != null) Destroy(_turret.gameObject);
+            if (_twin != null) Destroy(_twin.gameObject);
             _turret = null;
+            _twin = null;
         }
 
         /// <summary>

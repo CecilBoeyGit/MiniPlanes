@@ -16,6 +16,8 @@ namespace MiniPlanes
         public static event Action<PlaneTurret, EnemyPlane> AnyEnemyDowned;
 
         public EnemyPlane CurrentTarget { get; private set; }
+        /// <summary>The other turret of a twin pair, if any. The pair spread over different targets when they can.</summary>
+        public PlaneTurret Partner { get; set; }
         public int ShotsFired { get; private set; }
         /// <summary>Seconds of flight left before the turret comes off.</summary>
         public float TimeLeft { get; private set; }
@@ -76,6 +78,7 @@ namespace MiniPlanes
             if (TimeLeft <= 0f)
             {
                 ComicVfx.Play(ComicKind.Poof, _swivel.position, 0.05f);
+                if (Partner != null && Partner._swivel != null) ComicVfx.Play(ComicKind.Poof, Partner._swivel.position, 0.05f);
                 _plane.RemoveTurret();
                 return;
             }
@@ -107,10 +110,13 @@ namespace MiniPlanes
         {
             EnemyPlane best = null;
             float bestDistance = Mathf.Max(0.05f, _cfg.turretRange);
+            // A twin leaves its partner's target alone while there is anything else in range.
+            EnemyPlane taken = Partner != null ? Partner.CurrentTarget : null;
             foreach (var e in EnemyPlane.Active)
             {
                 if (e == null || !e.IsAlive) continue;
                 float d = Vector3.Distance(e.Position, _plane.Position);
+                if (e == taken) d += bestDistance;
                 if (d < bestDistance)
                 {
                     bestDistance = d;

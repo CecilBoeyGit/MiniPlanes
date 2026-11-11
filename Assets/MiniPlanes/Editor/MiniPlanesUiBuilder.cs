@@ -59,7 +59,8 @@ namespace MiniPlanes.Editor
                 menu = Ensure("MenuPanel", BuildMenu, existing =>
                 {
                     var m = existing.GetComponent<MenuPanel>();
-                    return m == null || m.levelRows == null || m.levelRows.Length < Progression.TutorialLevelCount || m.respawnButton == null || m.resultWallet == null;
+                    return m == null || m.levelRows == null || m.levelRows.Length < Progression.TutorialLevelCount || m.respawnButton == null || m.resultWallet == null
+                        || m.planeRows == null || m.planeRows.Length < 4;
                 }),
                 // Rebuilt once if it predates the plane knob on the progress bar.
                 splash = Ensure("SplashPanel", BuildSplash),
@@ -393,9 +394,9 @@ namespace MiniPlanes.Editor
             CoinSlot(page, 830f, 32f, out menu.hangarCoins);
 
             var rows = new List<MenuPanel.PlaneRow>();
-            for (int i = 0; i < 3; i++)
+            for (int i = 0; i < 4; i++)
             {
-                var b = Btn(page, "plane" + i, "", 1, Seafoam, Teal, At(30f, 120f + i * 134f, 280f, 120f), out _);
+                var b = Btn(page, "plane" + i, "", 1, Seafoam, Teal, At(30f, 112f + i * 128f, 280f, 116f), out _);
                 var row = new MenuPanel.PlaneRow { button = b };
                 row.name = Txt(b.Rect, "Name", "Plane", 32, _heading, Ink, TextAnchor.MiddleLeft, r =>
                 {

@@ -18,12 +18,14 @@ namespace MiniPlanes
         public float onlyHue = -1f;
     }
 
-    /// <summary>What a plane does on its own, beyond flying.</summary>
+    /// <summary>What a plane does on its own, beyond flying. A plane can have several.</summary>
+    [Flags]
     public enum PlanePerk
     {
-        [Tooltip("Nothing extra.")] None,
-        [Tooltip("Fits its own turret when the first enemy plane of each wave shows up.")] WaveTurret,
-        [Tooltip("Boosts for a few seconds at the start of each wave.")] WaveBoost
+        [Tooltip("Nothing extra.")] None = 0,
+        [Tooltip("Fits its own turret when the first enemy plane of each wave shows up.")] WaveTurret = 1,
+        [Tooltip("Boosts for a few seconds at the start of each wave.")] WaveBoost = 2,
+        [Tooltip("Every turret it fits comes as a pair, one each side of turretMount.")] TwinTurrets = 4
     }
 
     /// <summary>One plane the player can fly.</summary>
@@ -40,11 +42,12 @@ namespace MiniPlanes
         [Tooltip("Coins to unlock. 0 means owned from the start.")]
         public int price;
         public PlanePerk perk = PlanePerk.None;
+        public bool Has(PlanePerk p) => (perk & p) != 0;
         [Tooltip("For the WaveBoost perk: seconds of boost at the start of each wave.")]
         public float perkBoostSeconds = 3f;
         [Tooltip("For the WaveBoost perk: speed multiplier while boosting.")]
         public float perkBoostMultiplier = 1.6f;
-        [Tooltip("Where the turret sits, in wingspans from the model's centre: x right, y up, z forward.")]
+        [Tooltip("Where the turret sits, in wingspans from the model's centre: x right, y up, z forward. With twin turrets, the second sits mirrored across the centre line.")]
         public Vector3 turretMount = new Vector3(0f, 0.16f, -0.08f);
         [Tooltip("The plane's colour palettes. The first is the original.")]
         public PlanePalette[] palettes = new PlanePalette[0];

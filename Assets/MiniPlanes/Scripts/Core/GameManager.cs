@@ -647,8 +647,8 @@ namespace MiniPlanes
             if (revealer != null) revealer.OnTakeOff();
             CurrentFlow = Flow.Flying;
             var def = _plane.Definition;
-            _perkTurretPending = def != null && def.perk == PlanePerk.WaveTurret;
-            if (def != null && def.perk == PlanePerk.WaveBoost)
+            _perkTurretPending = def != null && def.Has(PlanePerk.WaveTurret);
+            if (def != null && def.Has(PlanePerk.WaveBoost))
             {
                 _plane.Boost(def.perkBoostSeconds, def.perkBoostMultiplier);
                 if (hud != null) hud.SetCaption("BOOST!", 1.2f);

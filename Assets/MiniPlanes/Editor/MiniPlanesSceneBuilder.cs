@@ -350,6 +350,31 @@ namespace MiniPlanes.Editor
                 }
                 cat.version = 3;
             }
+            if (cat.version < 4)
+            {
+                // The fourth plane: the most expensive, with twin turrets each wave and a boost at each wave start.
+                if (System.Array.FindIndex(cat.planes, p => p.id == "jet") < 0)
+                {
+                    var list = new System.Collections.Generic.List<PlaneDefinition>(cat.planes);
+                    list.Add(new PlaneDefinition
+                    {
+                        id = "jet", displayName = "Supersonic", price = 2000,
+                        description = "Twin turrets each wave, and a boost at every wave start.",
+                        perk = PlanePerk.WaveTurret | PlanePerk.TwinTurrets | PlanePerk.WaveBoost,
+                        turretMount = new Vector3(0.165f, 0.075f, -0.05f),
+                        palettes = new[]
+                        {
+                            Paint("Original", new Color(0.17f, 0.37f, 0.48f), 0f, 1f, 1f),
+                            Paint("Ember", new Color(0.82f, 0.32f, 0.26f), 0.44f, 1.05f, 1.15f),
+                            Paint("Forest", new Color(0.26f, 0.52f, 0.34f), -0.18f, 1f, 1.05f),
+                            Paint("Royal", new Color(0.42f, 0.32f, 0.72f), 0.15f, 1f, 1.05f)
+                        }
+                    });
+                    cat.planes = list.ToArray();
+                }
+                cat.version = 4;
+            }
+            Fill(cat, "jet", "PlayerJet", TexturedMatte("JetMatte", "PlayerJet"));
             EditorUtility.SetDirty(cat);
             return cat;
         }
