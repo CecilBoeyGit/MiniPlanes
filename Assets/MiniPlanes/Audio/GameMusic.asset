@@ -1,0 +1,46 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 048be73e1dd08ff4ba9d78318f03e178, type: 3}
+  m_Name: GameMusic
+  m_EditorClassIdentifier: Assembly-CSharp::MiniPlanes.GameMusic
+  volume: 0.5
+  startMenu: {fileID: 8300000, guid: 2bd2e0299ff2468a906f2ebabed68673, type: 3}
+  startMenuIntro: {fileID: 8300000, guid: b03875414aee45dda411c3dc063ea204, type: 3}
+  menu: {fileID: 8300000, guid: e6781ce91e7615c4f8755fca45a45ae2, type: 3}
+  normal: {fileID: 8300000, guid: 0b751348e082f324b9ed1b40c6feac0f, type: 3}
+  hostile: {fileID: 8300000, guid: c51336162b042054daa6c13f9453857e, type: 3}
+  uprise: {fileID: 8300000, guid: 943d7c9182e887a4e8499f7b3b008120, type: 3}
+  boss: {fileID: 8300000, guid: f42dfa9062b69b3478308a549e645847, type: 3}
+  riser: {fileID: 8300000, guid: d70b220320fbcd14098a47fa783906f7, type: 3}
+  climax: {fileID: 8300000, guid: 63f4fa52e9d3f244a8cc747a9b7db0a8, type: 3}
+  startMenuVolume: 0.9
+  menuVolume: 0.9
+  normalVolume: 0.85
+  hostileVolume: 0.85
+  upriseVolume: 0.9
+  bossVolume: 0.9
+  riserVolume: 0.35
+  climaxVolume: 0.9
+  crossfadeSeconds: 1.8
+  hostileInSeconds: 1.5
+  hostileOutSeconds: 3.5
+  hostileHoldSeconds: 2
+  bossFadeSeconds: 1.5
+  upriseFadeOutSeconds: 3.5
+  upriseStart: 0.7
+  upriseFadeIn: 0.06
+  upriseStartCutoff: 900
+  riserPitch: {x: 0.75, y: 1.7}
+  pauseVolume: 0.35
+  pauseCutoff: 1100
+  jingleDuck: 0.35
+  climaxDuck: 0.4

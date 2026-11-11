@@ -11,8 +11,6 @@ mkdir -p "$OUT"
 
 # name | source file | longest length in seconds (0 keeps it whole, for loops)
 LIST=$(cat <<'EOF'
-ring_pass|Hand/Ring Success/454612__richcraftstudios__richcraft-chime-d6ish-20181219.wav|1.4
-ring_big_o|Hand/Ring Success/660863__drooler__chime-improper.flac|1.4
 ring_clip|Hand/Ring Error/869696__signaturesoundsorg__ps1-pick-up-sfx-9.wav|0.4
 plane_hit|Hit/Thud.wav|1.1
 plane_crash|Death/849842__jeffpearson__explosion.mp3|2.1

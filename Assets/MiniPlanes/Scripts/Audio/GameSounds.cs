@@ -14,7 +14,10 @@ namespace MiniPlanes
         BombArmed, Explosion, SmallBlast, Defused,
         TubeBreak, IslandShatter, Dust,
         BossAlarm, MissileLock, MissileLaunch,
-        UiClick, Pause, Unpause, Title, LevelComplete, NewWave, LevelFailed, Purchase, Reward
+        UiClick, Pause, Unpause, Title, LevelComplete, NewWave, LevelFailed, Purchase, Reward,
+        // Added later. Keep new kinds at the end: the asset stores each kind by its number.
+        EnemyExplode, FighterEngine, BomberEngine,
+        StreakReveal, EnemyWarning, LifeUp
     }
 
     /// <summary>One sound: its clip and how it plays.</summary>
@@ -40,6 +43,8 @@ namespace MiniPlanes
     public class GameSounds : ScriptableObject
     {
         [Range(0f, 1f)] public float masterVolume = 1f;
+        [Tooltip("Background music. Leave empty for none.")]
+        public GameMusic music;
         public SoundEntry[] sounds = new SoundEntry[0];
 
         public SoundEntry Get(SoundKind kind)

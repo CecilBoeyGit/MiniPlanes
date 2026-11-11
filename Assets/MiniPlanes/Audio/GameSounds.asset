@@ -13,16 +13,17 @@ MonoBehaviour:
   m_Name: GameSounds
   m_EditorClassIdentifier: Assembly-CSharp::MiniPlanes.GameSounds
   masterVolume: 1
+  music: {fileID: 11400000, guid: ce91ac8e73783b74894c829f5233673b, type: 2}
   sounds:
   - kind: 0
     clip: {fileID: 8300000, guid: f7dedf3c83da8af40bb8c4819113d800, type: 3}
-    volume: 0.7
+    volume: 0.8
     pitchJitter: 0.06
     spatial: 1
     minInterval: 0.05
   - kind: 1
     clip: {fileID: 8300000, guid: 5d6a6587a27a82847a015fa8aa43024b, type: 3}
-    volume: 0.75
+    volume: 0.85
     pitchJitter: 0.06
     spatial: 1
     minInterval: 0.05
@@ -218,3 +219,39 @@ MonoBehaviour:
     pitchJitter: 0
     spatial: 0
     minInterval: 0.5
+  - kind: 34
+    clip: {fileID: 8300000, guid: a8af06d4af60f9348afd5b84c7c70595, type: 3}
+    volume: 0.7
+    pitchJitter: 0.06
+    spatial: 1
+    minInterval: 0.08
+  - kind: 35
+    clip: {fileID: 8300000, guid: b9675396386d83247a2f4d06fb86e1be, type: 3}
+    volume: 0.5
+    pitchJitter: 0.06
+    spatial: 1
+    minInterval: 0
+  - kind: 36
+    clip: {fileID: 8300000, guid: 078d08e9d0337ed47a8d93904c4e1ffe, type: 3}
+    volume: 0.6
+    pitchJitter: 0.06
+    spatial: 1
+    minInterval: 0
+  - kind: 37
+    clip: {fileID: 8300000, guid: 68270c2ef2964929827e2b1b7a2d05ba, type: 3}
+    volume: 0.75
+    pitchJitter: 0
+    spatial: 0
+    minInterval: 0.5
+  - kind: 38
+    clip: {fileID: 8300000, guid: 1392e7677a3847948725b878026a3b7c, type: 3}
+    volume: 0.7
+    pitchJitter: 0
+    spatial: 0
+    minInterval: 1
+  - kind: 39
+    clip: {fileID: 8300000, guid: e78f64d4bd3a4bc9a30bb6138fd10662, type: 3}
+    volume: 0.7
+    pitchJitter: 0
+    spatial: 0
+    minInterval: 0.3

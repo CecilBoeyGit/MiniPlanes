@@ -8,8 +8,8 @@ licence there before release: some freesound licences need attribution, and some
 
 | Game sound | Source |
 |---|---|
-| ring_pass | Hand/Ring Success/454612 richcraft chime d6ish |
-| ring_big_o | Hand/Ring Success/660863 chime improper |
+| ring_pass | synthesized (make_sfx.py) |
+| ring_big_o | synthesized (make_sfx.py) |
 | ring_clip | Hand/Ring Error/869696 ps1 pick up sfx 9 |
 | plane_hit | Hit/Thud.wav |
 | plane_crash | Death/849842 explosion |
@@ -41,3 +41,51 @@ licence there before release: some freesound licences need attribution, and some
 | level_failed | UI/Lose Screen/751863 failure notification sound |
 | purchase | UI/Level Complete l New Wave/656395 upgrade |
 | reward | Random/854025 fantasy ui stinger magical level up |
+| enemy_explode | Death/584119 small explode blast, layered with a synthesized boom and debris (make_sfx.py) |
+| enemy_engine_jet, enemy_engine_prop | synthesized (make_sfx.py) |
+| streak_reveal, enemy_warning, life_up | synthesized (make_sfx.py) |
+
+## Overlaps
+
+`Sfx` plays one sound per action: a pause, resume or purchase button plays its own sound without the click; a
+clipped ring that hurts the plane plays only the hit; the three-in-a-row reveal replaces that ring's chime; a new
+best replaces the game-over jingle. Jingles wait for what they would talk over (game over waits for the crash,
+the next-wave and level jingles wait for the finish hit) and the music dips under them, staying silent under the
+title jingle. The rules are the `Replaces` and `WaitsFor` tables in `Sfx.cs`.
+
+## Synthesized sounds and music
+
+`Tools/Audio/synth` makes the rest from scratch with numpy (no samples, so no licence to check):
+
+- `make_sfx.py`: the bubbly ring scores, the fighter jet and bomber propeller loops, the enemy explosion, and
+  `Music/riser` and `Music/climax`.
+- `make_music.py`: `bgm_menu` (other menus, 120 BPM B-flat major in the title's style), `bgm_start` (no longer
+  used; the start page now plays the title loop) and `bgm_boss`. Melodies, chords and drum patterns are written in
+  the script. Its synthesized `normal`, `hostile` and `uprise` versions are only made when named.
+
+## Title theme and in-flight music (`make_title.py`)
+
+Source: `UI/Title Screen/858479__tommasomotteran__friendly-ui-app-jingle.wav`, "Friendly UI App Jingle" by
+TommasoMotteran, https://freesound.org/s/858479/, **CC0** (no attribution needed). Piano and kalimba, 47.4 s,
+recorded on an exact 120 BPM grid in B-flat major; `title.ogg` is its first 4 s.
+
+Steps (all in `make_title.py`):
+1. Bars start at 0.266 s. Bars 0-1 are the opening; bars 2-17 are a 16-bar section that the recording repeats
+   from bar 18 (bar 18 matches bar 2 best of all bar pairs; the repeat is 1,411,200 samples = 32.000 s later).
+2. `Music/bgm_title_intro` = the opening, from the first sound to 0.25 s past bar 2's downbeat (4.38 s).
+3. `Music/bgm_title` = the next 32.000 s. Its last 0.25 s blends, equal-power, from the recording's own repeat
+   of bar 2 into bar 2 itself, so the loop end runs into its start with no click; the intro runs into the loop
+   start because the cut points are consecutive samples of the recording. Both share one gain (loop at -16 LUFS).
+4. `Music/bgm_normal`, `bgm_hostile`, `bgm_uprise` = the same 32 s loop plus synthesized drums (four-on-the-floor,
+   claps, galloping hats, fills, crashes; harder and denser for hostile and the build) and layers made from the
+   recording itself (a saturated bass doubling, a gated copy in the title's da-da-.-da gallop for hostile, a gated
+   shimmer for the build), with a sidechain pump. Same melody, key, bars and length, so they crossfade in lock-step.
+   The drums land within about 4 ms of the recording's notes.
+5. The game plays the intro then the loop on the start page (`GameMusic.startMenu`, `startMenuIntro`). At boot the
+   title cue starts it from the intro instead of playing `title.ogg` as a separate sound, so the opening isn't doubled.
+   `Music/climax` (the finish hit) is in B-flat to match.
+
+Run with Blender's Python (numpy is all they need):
+`"/c/Program Files/Blender Foundation/Blender 5.2/"*/python/bin/python.exe -I Tools/Audio/synth/make_title.py`
+and `.../make_music.py [menu start boss]`, `.../make_sfx.py [names]`.
+Open `Tools/Audio/listen.html` in a browser to hear them and try the in-flight crossfades.

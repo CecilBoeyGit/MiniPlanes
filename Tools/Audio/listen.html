@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MiniPlanes Sound Check</title>
+<style>
+:root {
+  --bg: #f6f4ef; --card: #ffffff; --ink: #1f2328; --muted: #6a6f76; --line: #e2ded5;
+  --accent: #2f7d6d; --warm: #d9822b; --hot: #c8443a; --boss: #6b4fb3;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #15171a; --card: #1e2125; --ink: #e8e6e1; --muted: #9aa0a6; --line: #2e3238;
+    --accent: #5bb8a4; --warm: #e8a35c; --hot: #e36b61; --boss: #a58ae6;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #15171a; --card: #1e2125; --ink: #e8e6e1; --muted: #9aa0a6; --line: #2e3238;
+  --accent: #5bb8a4; --warm: #e8a35c; --hot: #e36b61; --boss: #a58ae6;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 860px; margin: 0 auto; padding: 28px 16px 60px; }
+h1 { font-size: 24px; margin: 0 0 4px; }
+h2 { font-size: 16px; margin: 32px 0 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+p.lede { color: var(--muted); margin: 0 0 8px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px; }
+.clip { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+.clip b { display: block; font-size: 14px; }
+.clip span { display: block; color: var(--muted); font-size: 12.5px; margin-bottom: 6px; }
+audio { width: 100%; height: 34px; }
+.sim { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+.row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 8px 0; }
+button { font: inherit; padding: 7px 14px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer; }
+button.primary { background: var(--accent); color: #fff; border-color: transparent; }
+button[aria-pressed="true"] { background: var(--hot); color: #fff; border-color: transparent; }
+button.boss[aria-pressed="true"] { background: var(--boss); }
+label { color: var(--muted); }
+input[type=range] { flex: 1; min-width: 160px; accent-color: var(--accent); }
+.meters { display: grid; grid-template-columns: 90px 1fr 44px; gap: 6px 10px; align-items: center; margin-top: 12px; font-size: 13px; }
+.bar { height: 10px; background: var(--line); border-radius: 5px; overflow: hidden; }
+.bar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .1s linear; }
+.bar.h i { background: var(--hot); } .bar.u i { background: var(--warm); } .bar.b i { background: var(--boss); }
+.note { color: var(--muted); font-size: 13px; margin-top: 10px; }
+code { font-size: 12.5px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>MiniPlanes sound check</h1>
+  <p class="lede">The synthesized effects and music from <code>Tools/Audio/synth</code>. Open this file from the project folder so the clip paths resolve.</p>
+
+  <h2>New effects</h2>
+  <div class="grid" id="sfx"></div>
+
+  <h2>Menu music</h2>
+  <div class="grid" id="menus"></div>
+
+  <h2>In flight (try the mix)</h2>
+  <div class="sim">
+    <div class="row">
+      <button class="primary" id="play">Play</button>
+      <button id="flight">Fly a path (45 s)</button>
+      <button id="enemies" aria-pressed="false">Enemy planes up</button>
+      <button id="boss" class="boss" aria-pressed="false">Zeppelin wave</button>
+    </div>
+    <div class="row">
+      <label for="prog">Path flown</label>
+      <input type="range" id="prog" min="0" max="100" value="0">
+      <span id="progv">0%</span>
+    </div>
+    <div class="meters">
+      <span>Normal</span><div class="bar"><i id="mN"></i></div><span id="vN">0</span>
+      <span>Hostile</span><div class="bar h"><i id="mH"></i></div><span id="vH">0</span>
+      <span>Build</span><div class="bar u"><i id="mU"></i></div><span id="vU">0</span>
+      <span>Riser</span><div class="bar u"><i id="mR"></i></div><span id="vR">0</span>
+      <span>Boss</span><div class="bar b"><i id="mB"></i></div><span id="vB">0</span>
+    </div>
+    <p class="note">Same rules as the game's MusicDirector: hostile fades in over 1.5 s and out over 3.5 s, 2 s after the last enemy;
+      the build fades in from 70% of the path and the riser speeds up until the finish hit, then everything settles back to normal.
+      The game also opens a low-pass filter on the build from muffled to bright; this page can't, so the build starts fully bright here.</p>
+  </div>
+</main>
+<script>
+const A = "../../Assets/MiniPlanes/Audio/";
+const M = A + "Music/";
+const sfx = [
+  ["ring_pass", "Ring score: four bubbles up a major arpeggio, with fizz", A],
+  ["ring_big_o", "Big combined O: a big gloop and sub thump, then a lower, longer bubble cascade", A],
+  ["enemy_engine_jet", "Fighter jet engine (2 s loop)", A, true],
+  ["enemy_engine_prop", "Bomber heavy twin propeller (2 s loop)", A, true],
+  ["enemy_explode", "Enemy plane destroyed: blast, low boom and debris", A],
+  ["streak_reveal", "Three rings in a row: three pops, a bubble cascade and a shimmer as the path appears", A],
+  ["enemy_warning", "First enemy plane into a clear sky: crushed two-tone alert over a radar ping", A],
+  ["life_up", "Extra life (not hooked up yet): square arpeggio racing up with bubbles", A],
+  ["riser", "Build riser (4 s endless-rising loop; the game speeds it up)", M, true],
+  ["climax", "Finish hit", M],
+];
+const menus = [
+  ["bgm_title_intro", "Title opening, played once (the first 4 s of the title recording)"],
+  ["bgm_title", "Start page: the title recording looped (32 s, joins its own start)"],
+  ["bgm_menu", "Other menus: 120 BPM, B-flat major, in the boot jingle's style: galloping bass and marimba"],
+  ["bgm_boss", "Zeppelin waves: 126 BPM, E minor, 16th ostinato, crushed square lead"],
+];
+function card(host, file, text, dir, loop) {
+  const d = document.createElement("div");
+  d.className = "clip";
+  d.innerHTML = `<b>${file}</b><span>${text}</span><audio controls preload="none" ${loop ? "loop" : ""} src="${dir}${file}.ogg"></audio>`;
+  host.appendChild(d);
+}
+sfx.forEach(([f, t, dir, loop]) => card(document.getElementById("sfx"), f, t, dir, loop));
+menus.forEach(([f, t]) => card(document.getElementById("menus"), f, t, M, true));
+
+// ---- the in-flight mix
+function track(file, loop = true) { const a = new Audio(M + file + ".ogg"); a.loop = loop; a.preload = "auto"; a.volume = 0; return a; }
+const N = track("bgm_normal"), H = track("bgm_hostile"), U = track("bgm_uprise"), B = track("bgm_boss"), R = track("riser"), C = track("climax", false);
+R.preservesPitch = false;
+const lv = { n: 0, h: 0, u: 0, b: 0, r: 0 };
+let playing = false, enemies = false, boss = false, hold = 0, progress = 0, flying = false, flightT = 0, finished = false, after = -1, buildAtFinish = 0, duck = 1, duckUntil = 0;
+const ui = id => document.getElementById(id);
+const step = (v, t, secs, dt) => v + Math.max(-dt / secs, Math.min(dt / secs, t - v));
+const smooth = (a, b, x) => { const k = Math.max(0, Math.min(1, (x - a) / (b - a))); return k * k * (3 - 2 * k); };
+
+ui("play").onclick = async () => {
+  playing = !playing;
+  ui("play").textContent = playing ? "Stop" : "Play";
+  if (playing) { for (const a of [N, H, U]) { a.currentTime = 0; } await Promise.all([N, H, U].map(a => a.play())); if (boss) { B.currentTime = 0; B.play(); } }
+  else { [N, H, U, B, R].forEach(a => a.pause()); flying = false; }
+};
+ui("enemies").onclick = e => { enemies = !enemies; e.target.setAttribute("aria-pressed", enemies); };
+ui("boss").onclick = e => { boss = !boss; e.target.setAttribute("aria-pressed", boss); if (boss && playing) { B.currentTime = 0; B.play(); } };
+ui("prog").oninput = e => { progress = e.target.value / 100; flying = false; finished = progress >= 1; if (!finished) after = -1; };
+ui("flight").onclick = async () => {
+  if (!playing) await ui("play").onclick();
+  flying = true; flightT = 0; finished = false; after = -1; progress = 0;
+};
+
+let last = performance.now();
+function tick(now) {
+  const dt = Math.min(0.1, (now - last) / 1000); last = now;
+  if (playing) {
+    if (flying) {
+      flightT += dt; progress = Math.min(1, flightT / 45);
+      // A scripted path: fighters show up twice on the way.
+      const e = (progress > 0.15 && progress < 0.35) || (progress > 0.5 && progress < 0.62);
+      if (e !== enemies) { enemies = e; ui("enemies").setAttribute("aria-pressed", e); }
+      if (progress >= 1) { flying = false; }
+      ui("prog").value = Math.round(progress * 100);
+    }
+    if (progress >= 1 && !finished) finished = true;
+    if (finished && after < 0) { after = 0; buildAtFinish = lv.u; C.currentTime = 0; C.volume = 0.9; C.play(); duck = 0.4; duckUntil = now + 900; }
+    if (after >= 0) after += dt;
+    hold = enemies ? 2 : Math.max(0, hold - dt);
+    const hostile = !boss && (enemies || hold > 0);
+    let build = 0;
+    if (!boss) build = after >= 0 ? buildAtFinish * (1 - Math.min(1, after / 3.5)) : smooth(0.7, 0.76, progress);
+    lv.b = step(lv.b, boss ? 1 : 0, 1.5, dt);
+    lv.h = step(lv.h, hostile ? 1 - build : 0, hostile ? 1.5 : 3.5, dt);
+    lv.u = step(lv.u, boss ? 0 : build, 0.25, dt);
+    const rest = boss ? 0 : Math.max(0, 1 - lv.u - lv.h);
+    lv.n = step(lv.n, rest, lv.n > 0.01 && !boss ? 0.25 : 1.5, dt);
+    const k = Math.max(0, Math.min(1, (progress - 0.7) / 0.3));
+    const riser = after < 0 && progress > 0.7 && progress < 1 ? smooth(0, 0.25, k) * (0.4 + 0.6 * k) : 0;
+    lv.r = step(lv.r, riser, 0.3, dt);
+    R.playbackRate = 0.75 + (1.7 - 0.75) * k;
+    if (lv.r > 0 && R.paused) R.play(); if (lv.r <= 0 && !R.paused) R.pause();
+    if (lv.b <= 0 && !B.paused) B.pause();
+    if (now > duckUntil) duck = Math.min(1, duck + dt * 1.2);
+    const m = 0.8 * duck;
+    N.volume = m * 0.85 * lv.n; H.volume = m * 0.85 * lv.h; U.volume = m * 0.9 * lv.u; B.volume = m * 0.9 * lv.b; R.volume = m * 0.35 * lv.r;
+  }
+  ui("progv").textContent = Math.round(progress * 100) + "%";
+  for (const [id, v] of [["N", lv.n], ["H", lv.h], ["U", lv.u], ["R", lv.r], ["B", lv.b]]) {
+    ui("m" + id).style.width = (v * 100).toFixed(0) + "%"; ui("v" + id).textContent = v.toFixed(2);
+  }
+  requestAnimationFrame(tick);
+}
+requestAnimationFrame(tick);
+</script>
+</body>
+</html>
