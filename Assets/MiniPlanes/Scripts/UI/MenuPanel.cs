@@ -367,6 +367,7 @@ namespace MiniPlanes
             if (!catalog.IsOwned(_viewing))
             {
                 if (!Progression.SpendCoins(def.price)) return;
+                Sfx.Play(SoundKind.Purchase);
                 Progression.GrantPlane(def.id);
             }
             Progression.SelectedPlane = def.id;

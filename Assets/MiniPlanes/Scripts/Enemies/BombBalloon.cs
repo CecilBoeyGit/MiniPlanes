@@ -173,6 +173,7 @@ namespace MiniPlanes
             if (CurrentState != State.Idle) return;
             CurrentState = State.Armed;
             _fuse = _cfg.bombFuseSeconds;
+            Sfx.Play(SoundKind.BombArmed, transform.position);
         }
 
         void SetFlash(float amount)
@@ -210,6 +211,7 @@ namespace MiniPlanes
             CurrentState = State.Done;
             WasContained = true;
             ComicVfx.Play(ComicKind.Poof, transform.position);
+            Sfx.Play(SoundKind.Defused, transform.position);
             AnyContained?.Invoke(this);
             Destroy(gameObject);
         }
@@ -220,6 +222,7 @@ namespace MiniPlanes
             if (!IsAlive) return;
             CurrentState = State.Done;
             ComicVfx.Play(ComicKind.Blast, transform.position, _cfg.bombBlastRadius * 1.3f);
+            Sfx.Play(SoundKind.Explosion, transform.position);
             if (_plane != null && _plane.IsFlying &&
                 Vector3.Distance(transform.position, _plane.Position) < _cfg.bombBlastRadius)
             {

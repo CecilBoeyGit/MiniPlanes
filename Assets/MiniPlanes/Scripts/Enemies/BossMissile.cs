@@ -225,6 +225,7 @@ namespace MiniPlanes
             _fallVelocity = _forward * 0.03f;
             _spin = new Vector3(UnityEngine.Random.Range(-200f, 200f), UnityEngine.Random.Range(-90f, 90f), UnityEngine.Random.Range(-300f, 300f));
             ComicVfx.Play(ComicKind.Flick, transform.position, 0.09f);
+            Sfx.Play(SoundKind.Defused, transform.position);
             AnyDefused?.Invoke(this);
         }
 
@@ -236,6 +237,7 @@ namespace MiniPlanes
             ComicVfx.Play(ComicKind.Blast, transform.position, _cfg.missileBlastRadius * 1.3f);
             if (_plane != null && _plane.IsFlying && Vector3.Distance(transform.position, _plane.Position) < _cfg.missileBlastRadius)
                 _plane.Damage("caught in a missile blast");
+            Sfx.Play(WasSmacked ? SoundKind.SmallBlast : SoundKind.Explosion, transform.position);
             AnyExploded?.Invoke(this);
             Destroy(gameObject);
         }

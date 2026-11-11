@@ -122,6 +122,7 @@ namespace MiniPlanes
             {
                 Target.Damage("rammed by a fighter");
                 ComicVfx.Play(ComicKind.Crash, transform.position, 0.09f);
+                Sfx.Play(SoundKind.SmallBlast, transform.position);
                 Die(Vector3.down * 0.5f);
                 return;
             }
@@ -142,6 +143,7 @@ namespace MiniPlanes
             {
                 _burstLeft = Mathf.Max(1, Cfg.burstCount);
                 _burstTimer = 0f;
+                Sfx.Play(SoundKind.GunBurst, transform.position);
                 _fireTimer = Cfg.burstInterval;
             }
         }
@@ -172,6 +174,7 @@ namespace MiniPlanes
         {
             if (!IsAlive) return;
             ComicVfx.Play(ComicKind.Flick, transform.position);
+            Sfx.Play(SoundKind.Flick, transform.position);
             OnFlicked();
             Die(Vector3.ClampMagnitude(velocity * 0.5f, 1.5f));
         }

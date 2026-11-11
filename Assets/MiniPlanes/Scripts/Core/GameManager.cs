@@ -21,6 +21,7 @@ namespace MiniPlanes
         [Header("Scene references")]
         public Transform head;
         public GameArt art;
+        public GameSounds sounds;
         public PlaneCatalog catalog;
         public CurvedHud hud;
         public MenuPanel menu;
@@ -104,6 +105,7 @@ namespace MiniPlanes
         bool _startPressed;
         IslandField _islands;
         bool _perkTurretPending;
+        bool _titlePlayed;
 
         void Awake()
         {
@@ -131,6 +133,10 @@ namespace MiniPlanes
             vfx.transform.SetParent(transform, false);
             vfx.Init(art, head);
 
+            var sfx = new GameObject("Sfx").AddComponent<Sfx>();
+            sfx.transform.SetParent(transform, false);
+            sfx.Init(sounds, head);
+
             var planeGo = new GameObject("MiniPlane");
             planeGo.transform.SetParent(transform, false);
             _plane = planeGo.AddComponent<MiniPlane>();
@@ -145,13 +151,13 @@ namespace MiniPlanes
                 {
                     if (r == null) continue;
                     r.Scored += OnSingleRingScored;
-                    r.PlaneHitRing += ring => DamagePlane("clipped the ring");
+                    r.PlaneHitRing += ring => ClipRing();
                     r.Track(_plane);
                 }
             if (merger != null)
             {
                 merger.Scored += OnMergedRingScored;
-                merger.PlaneHitRing += m => DamagePlane("clipped the ring");
+                merger.PlaneHitRing += m => ClipRing();
                 merger.Track(_plane);
             }
             if (hazards != null)
@@ -294,6 +300,8 @@ namespace MiniPlanes
             if (IsPaused || (CurrentFlow != Flow.Flying && CurrentFlow != Flow.PreFlight)) return;
             IsPaused = true;
             Time.timeScale = 0f;
+            AudioListener.pause = true;
+            Sfx.Play(SoundKind.Pause);
             SetGameplayInput(false);
             if (hud != null) hud.gameObject.SetActive(false);
             if (pausePanel != null) pausePanel.Open();
@@ -304,6 +312,7 @@ namespace MiniPlanes
         {
             if (!IsPaused) return;
             EndPause();
+            Sfx.Play(SoundKind.Unpause);
             SetGameplayInput(true);
         }
 
@@ -312,6 +321,7 @@ namespace MiniPlanes
             if (!IsPaused) return;
             IsPaused = false;
             Time.timeScale = 1f;
+            AudioListener.pause = false;
             if (hud != null) hud.gameObject.SetActive(true);
             if (pausePanel != null) pausePanel.Close();
         }
@@ -356,6 +366,11 @@ namespace MiniPlanes
             // Give tracking a moment to settle before placing the panel.
             yield return null;
             if (menu != null) menu.ShowStart(levels);
+            if (!_titlePlayed)
+            {
+                _titlePlayed = true;
+                Sfx.Play(SoundKind.Title);
+            }
         }
 
         IEnumerator LevelRoutine(int index)
@@ -413,6 +428,8 @@ namespace MiniPlanes
             }
             if (menu != null)
                 menu.ShowResult(LastFlightPassed ? "LEVEL PASSED" : "TRY AGAIN", detail, "SCORE  " + Score, LastFlightPassed, LastFlightPassed, nextLabel, CoinsThisRun);
+            Sfx.Play(LastFlightPassed ? SoundKind.LevelComplete : SoundKind.LevelFailed);
+            if (LastFirstClearCoins > 0) Sfx.Play(SoundKind.Reward, 0.7f);
         }
 
         IEnumerator InfiniteRoutine()
@@ -435,6 +452,7 @@ namespace MiniPlanes
             {
                 Wave++;
                 infinite.Apply(_waveConfig, Wave);
+                if (Wave > 1) Sfx.Play(SoundKind.NewWave);
                 string waveIntro = _waveConfig.bossLevel > 0 ? "BOSS WAVE " + Wave + "\nThe zeppelin can't be destroyed. Survive it!" : "WAVE " + Wave;
                 yield return Flight(_waveConfig, "W " + Wave, waveIntro, Wave > 1, false);
                 alive = _plane.CurrentState == MiniPlane.State.Finished;
@@ -444,6 +462,8 @@ namespace MiniPlanes
 
             LastFlightPassed = false;
             bool best = Progression.ReportScore(Score);
+            Sfx.Play(SoundKind.LevelFailed);
+            if (best) Sfx.Play(SoundKind.Reward, 0.7f);
             yield return new WaitForSeconds(resultDelaySeconds);
             Clean();
             HideHud();
@@ -576,6 +596,12 @@ namespace MiniPlanes
             RegisterRing(mergedRingPoints, mergedRingCoins, point);
         }
 
+        void ClipRing()
+        {
+            if (CurrentFlow == Flow.Flying) Sfx.Play(SoundKind.RingClip, _plane.Position);
+            DamagePlane("clipped the ring");
+        }
+
         void RegisterRing(int points, int coins, Vector3 point)
         {
             if (CurrentFlow != Flow.Flying) return;
@@ -583,6 +609,7 @@ namespace MiniPlanes
             AddScore(points, point);
             AddCoins(coins);
             ComicVfx.Play(ComicKind.RingPass, point);
+            Sfx.Play(points == mergedRingPoints && points != singleRingPoints ? SoundKind.RingBigO : SoundKind.RingPass, point);
             if (_cfg != null) _plane.AddFuel(_cfg.FuelPerRing);
             if (revealer != null) revealer.OnRingPass();
         }
@@ -660,17 +687,20 @@ namespace MiniPlanes
         void OnPlaneHit(MiniPlane plane, string reason)
         {
             ComicVfx.Play(ComicKind.Spark, plane.Position, 0.07f);
+            Sfx.Play(SoundKind.PlaneHit, plane.Position);
             if (revealer != null) revealer.BreakStreak();
         }
 
         void OnShieldLost(MiniPlane plane)
         {
             ComicVfx.Play(ComicKind.ShieldPop, plane.Position);
+            Sfx.Play(SoundKind.ShieldBreak, plane.Position);
         }
 
         void OnPlaneCrashed(MiniPlane plane, string reason)
         {
             ComicVfx.Play(ComicKind.Crash, plane.Position);
+            Sfx.Play(SoundKind.PlaneCrash, plane.Position);
             if (revealer != null) revealer.BreakStreak();
         }
     }

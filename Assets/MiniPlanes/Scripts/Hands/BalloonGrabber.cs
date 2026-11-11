@@ -123,11 +123,13 @@ namespace MiniPlanes
             {
                 bestTube.Grab(this, point, HandRotation(hand, point));
                 HeldTube = bestTube;
+                Sfx.Play(SoundKind.BalloonPop, point);
                 return;
             }
             if (best == null) return;
             best.Grab(this);
             Held = best;
+            Sfx.Play(SoundKind.BalloonPop, point);
         }
 
         void OnDisable()

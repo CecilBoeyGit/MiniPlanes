@@ -207,6 +207,7 @@ namespace MiniPlanes
                 debris.Setup(Mathf.Lerp(0.18f, 0.3f, (float)rng.NextDouble()) * Size, rng.Next(), _art, _plane, _hands, at, velocity);
             }
             ComicVfx.Play(ComicKind.Crash, transform.position, Size * 1.4f);
+            Sfx.Play(SoundKind.IslandShatter, transform.position);
             AnyShattered?.Invoke(this);
             Destroy(gameObject);
         }
@@ -319,6 +320,7 @@ namespace MiniPlanes
         void Dust()
         {
             IsAlive = false;
+            Sfx.Play(SoundKind.Dust, transform.position);
             ComicVfx.Play(ComicKind.Poof, transform.position, _size * 2.2f);
             Destroy(gameObject);
         }

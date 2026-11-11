@@ -71,6 +71,7 @@ namespace MiniPlanes
         public void Block()
         {
             ComicVfx.Play(ComicKind.Spark, transform.position);
+            Sfx.Play(SoundKind.BulletBlock, transform.position);
             Destroy(gameObject);
         }
 

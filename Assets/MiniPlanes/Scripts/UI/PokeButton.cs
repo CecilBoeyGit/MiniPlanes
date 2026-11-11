@@ -58,6 +58,7 @@ namespace MiniPlanes
 
         public void Click()
         {
+            Sfx.Play(SoundKind.UiClick);
             onClick.Invoke();
             Clicked?.Invoke(this);
         }

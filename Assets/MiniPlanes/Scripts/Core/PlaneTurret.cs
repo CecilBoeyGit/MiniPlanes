@@ -158,6 +158,7 @@ namespace MiniPlanes
         void Fire(Vector3 direction, EnemyPlane target)
         {
             ShotsFired++;
+            Sfx.Play(SoundKind.TurretShot, _swivel.position);
             var shot = TurretShot.Create(_art != null ? _art.turretShot : null);
             Vector3 start = _swivel.position + direction * 0.012f;
             shot.Fire(start, direction * _cfg.turretShotSpeed + _plane.Velocity, this, target,

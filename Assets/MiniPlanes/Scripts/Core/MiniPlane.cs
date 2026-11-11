@@ -86,6 +86,8 @@ namespace MiniPlanes
         float _boostLeft;
         float _boostMultiplier = 1f;
         TrailRenderer _trail;
+        AudioSource _engine;
+        float _engineVolume;
 
         public void SetHead(Transform head) { _head = head; }
 
@@ -121,6 +123,9 @@ namespace MiniPlanes
                 _gauge = gauge.GetComponent<FuelGaugeView>();
                 gauge.SetActive(false);
             }
+            _engine = Sfx.CreateLoop(SoundKind.EngineLoop, transform);
+            _engineVolume = Sfx.BaseVolume(SoundKind.EngineLoop);
+
             if (art != null && art.boostTrail != null)
             {
                 var trailGo = new GameObject("BoostTrail");
@@ -274,6 +279,7 @@ namespace MiniPlanes
 
         void Update()
         {
+            UpdateEngine();
             if (_propeller != null && (CurrentState == State.Flying || CurrentState == State.Waiting))
             {
                 Vector3 axis = _propeller.InverseTransformDirection(transform.forward);
@@ -362,12 +368,27 @@ namespace MiniPlanes
         public void GiveShield()
         {
             HasShield = true;
+            Sfx.Play(SoundKind.ShieldOn, transform.position);
+        }
+
+        /// <summary>The propeller hum: on while the plane is out, higher and louder when boosting.</summary>
+        void UpdateEngine()
+        {
+            if (_engine == null) return;
+            bool running = _visible && (CurrentState == State.Flying || CurrentState == State.Waiting);
+            if (running && !_engine.isPlaying) _engine.Play();
+            else if (!running && _engine.isPlaying) _engine.Stop();
+            if (!running) return;
+            float boost = Mathf.Clamp01(SpeedMultiplier - 1f);
+            _engine.pitch = (CurrentState == State.Waiting ? 0.85f : 1f) + 0.35f * boost;
+            _engine.volume = _engineVolume * (1f + 0.4f * boost);
         }
 
         /// <summary>Speeds the plane up by a multiplier for some seconds. A longer or stronger boost wins.</summary>
         public void Boost(float seconds, float multiplier)
         {
             if (seconds <= 0f || multiplier <= 1f) return;
+            Sfx.Play(SoundKind.Boost, transform.position);
             _boostMultiplier = IsBoosting ? Mathf.Max(_boostMultiplier, multiplier) : multiplier;
             _boostLeft = Mathf.Max(_boostLeft, seconds);
         }
@@ -392,6 +413,7 @@ namespace MiniPlanes
             if (_turret != null)
             {
                 _turret.Refresh();
+                Sfx.Play(SoundKind.TurretOn, transform.position);
                 return _turret;
             }
             var go = new GameObject("Turret");
@@ -399,6 +421,7 @@ namespace MiniPlanes
             go.transform.localPosition = TurretMount;
             _turret = go.AddComponent<PlaneTurret>();
             _turret.Setup(this, cfg, _art, wingspan * turretSizePerSpan);
+            Sfx.Play(SoundKind.TurretOn, transform.position);
             go.SetActive(_visible);
             return _turret;
         }
