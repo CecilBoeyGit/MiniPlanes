@@ -44,6 +44,8 @@ except wave coins on `Infinite.asset`.
   speed of the enemies' (`pathRampStretch`), so wave 5 flies what wave 3 used to.
 - **Bluebird** (500): fits its own turret, the same as the gold balloon's, when the first enemy plane of
   each wave shows up. **Pusher Racer** (1000): boosts for 3 seconds at the start of every wave.
+  **Supersonic** (2000): fits twin turrets (one on each dome, each picking its own target) when each
+  wave's first enemy shows up, and boosts at every wave start. Perks are flags, so a plane can have several.
 
 ## Levels
 
