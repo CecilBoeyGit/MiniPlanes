@@ -72,9 +72,8 @@ namespace MiniPlanes.Editor
             SetInt(so, "m_MainLightShadowsSupported", 0);
             SetInt(so, "m_AdditionalLightShadowsSupported", 0);
             SetInt(so, "m_SupportsHDR", 0);
-            // The glass panels bend the scene behind them, which needs a copy of it. Half size keeps it cheap.
-            SetInt(so, "m_RequireOpaqueTexture", 1);
-            SetInt(so, "m_OpaqueDownsampling", 1);
+            // Nothing samples a copy of the scene any more (the glass UI is gone), so don't pay for one.
+            SetInt(so, "m_RequireOpaqueTexture", 0);
             so.ApplyModifiedPropertiesWithoutUndo();
             EditorUtility.SetDirty(asset);
         }
