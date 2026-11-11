@@ -53,7 +53,7 @@ namespace MiniPlanes
                 float size = Mathf.Lerp(cfg.islandMinSize, cfg.islandMaxSize, (float)rng.NextDouble());
                 Vector3 pos = headPos + Quaternion.AngleAxis(az, Vector3.up) * forward * dist + Vector3.up * height;
 
-                if (path != null && DistanceToPath(path, pos) < size * 0.6f + cfg.islandPathClearance) continue;
+                if (path != null && DistanceToPath(path, pos) < size * 0.6f + cfg.islandPathClearance + FloatingIsland.BobHeight) continue;
                 bool crowded = false;
                 foreach (var p in placed)
                     if (Vector3.Distance(p.pos, pos) < (p.size + size) * 0.55f + 0.03f) { crowded = true; break; }
@@ -82,7 +82,7 @@ namespace MiniPlanes
                 if (island == null || !island.IsAlive || island.transform.parent != transform) continue;
                 float h = island.Size * 0.55f;
                 Vector3 middle = island.Position + Vector3.up * (island.Size * 0.04f + h * 0.5f);
-                if (path != null && DistanceToPath(path, middle) < h * 0.5f + cfg.islandPathClearance) continue;
+                if (path != null && DistanceToPath(path, middle) < h * 0.5f + cfg.islandPathClearance + FloatingIsland.BobHeight) continue;
                 candidates.Add(island);
             }
             for (int i = 0; i < count && candidates.Count > 0; i++)
@@ -131,6 +131,8 @@ namespace MiniPlanes
         GameArt _art;
         Vector3 _anchor;
         float _bobPhase;
+        /// <summary>How far an island bobs up and down, in metres. Placement leaves room for it.</summary>
+        public const float BobHeight = 0.005f;
         int _seed;
         readonly List<BoneSegment> _segments = new List<BoneSegment>(32);
 
@@ -209,7 +211,7 @@ namespace MiniPlanes
         void Update()
         {
             if (!IsAlive) return;
-            transform.position = _anchor + Vector3.up * (Mathf.Sin(Time.time * 0.7f + _bobPhase) * 0.005f);
+            transform.position = _anchor + Vector3.up * (Mathf.Sin(Time.time * 0.7f + _bobPhase) * BobHeight);
             transform.Rotate(0f, 4f * Time.deltaTime, 0f, Space.World);
             if (GameManager.IsPaused) return;
 
