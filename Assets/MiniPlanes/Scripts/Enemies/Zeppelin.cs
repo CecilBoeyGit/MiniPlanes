@@ -6,9 +6,10 @@ using UnityEngine;
 namespace MiniPlanes
 {
     /// <summary>
-    /// The boss: a giant zeppelin hanging in the distance, broadside on. It can't be destroyed. It cycles
-    /// through its attacks with rests between: bullet trails that mostly aim at the plane, batches of
-    /// fighters launched from its decks, and, when the level allows, large tracking missiles.
+    /// The boss: a giant zeppelin hanging in the distance, broadside on. It can't be destroyed. Between attacks
+    /// it cruises a random way, left or right, round the flight path to a new spot, and only then starts its
+    /// next attack: bullet trails that mostly aim at the plane, batches of fighters launched from its decks,
+    /// and, when the level allows, large tracking missiles.
     /// </summary>
     public class Zeppelin : MonoBehaviour
     {
@@ -22,9 +23,13 @@ namespace MiniPlanes
         public float distance = 2.0f;
         [Tooltip("Height above the eyes, in metres.")]
         public float heightAboveEyes = 0.35f;
-        [Tooltip("How far it drifts side to side, in metres.")]
-        public float swayMetres = 0.25f;
-        public float swayPeriodSeconds = 24f;
+        [Tooltip("Each move between attacks swings it this far round the path, in degrees.")]
+        public float minMoveDeg = 25f;
+        public float maxMoveDeg = 55f;
+        [Tooltip("It stays within this angle either side of straight ahead, in degrees.")]
+        public float maxAzimuthDeg = 65f;
+        [Tooltip("Cruising speed round the path, in degrees per second.")]
+        public float cruiseDegPerSecond = 14f;
         public float arriveSeconds = 3f;
         public float bulletRadius = 0.006f;
 
@@ -33,6 +38,10 @@ namespace MiniPlanes
         public int FighterBatches { get; private set; }
         public int MissilesLaunched { get; private set; }
         public int RoundsFired { get; private set; }
+        /// <summary>Where it sits round the path, in degrees from straight ahead; positive is to the right.</summary>
+        public float Azimuth => _azimuth;
+        public int Moves { get; private set; }
+        public bool IsMoving => !Mathf.Approximately(_azimuth, _targetAzimuth);
         public Vector3 Position => transform.position;
         /// <summary>A new attack began. GameManager shows its warning.</summary>
         public event Action<Zeppelin, Attack> AttackStarted;
@@ -45,8 +54,13 @@ namespace MiniPlanes
         EnemySpawner _spawner;
         Vector3 _home;
         Vector3 _side;
+        Vector3 _centre;
+        Vector3 _forward;
         float _time;
         float _arrive;
+        float _azimuth;
+        float _targetAzimuth;
+        float _facing = -1f;
         System.Random _rng;
         readonly List<EnemyPlane> _launched = new List<EnemyPlane>();
 
@@ -78,6 +92,8 @@ namespace MiniPlanes
             if (forward.sqrMagnitude < 1e-4f) forward = Vector3.forward;
             forward.Normalize();
             _side = Vector3.Cross(Vector3.up, forward).normalized;
+            _forward = forward;
+            _centre = headPos;
             _home = headPos + forward * distance + Vector3.up * heightAboveEyes;
             // Broadside on, nose to the player's left, so the docks on its near side face the player.
             transform.rotation = Quaternion.LookRotation(-_side, Vector3.up);
@@ -85,6 +101,7 @@ namespace MiniPlanes
             BuildModel();
             Current = this;
             StartCoroutine(Run());
+            Sfx.Play(SoundKind.BossAlarm);
         }
 
         void BuildModel()
@@ -139,10 +156,24 @@ namespace MiniPlanes
             _time += dt;
             _arrive = Mathf.Clamp01(_arrive + dt / Mathf.Max(0.1f, arriveSeconds));
             float ease = 1f - (1f - _arrive) * (1f - _arrive);
-            Vector3 sway = _side * (Mathf.Sin(_time * Mathf.PI * 2f / swayPeriodSeconds) * swayMetres)
-                           + Vector3.up * (Mathf.Sin(_time * 0.6f) * 0.03f);
-            Vector3 away = (_home - (_head != null ? _head.position : _home)).normalized;
-            transform.position = Vector3.Lerp(_home + away * 1.2f, _home, ease) + sway * ease;
+            // Cruise round the path towards the chosen spot, easing in and out.
+            float left = _targetAzimuth - _azimuth;
+            if (Mathf.Abs(left) > 1e-3f)
+            {
+                float step = cruiseDegPerSecond * dt * Mathf.Clamp(Mathf.Abs(left) / 8f, 0.25f, 1f);
+                _azimuth = Mathf.Abs(left) <= step ? _targetAzimuth : _azimuth + Mathf.Sign(left) * step;
+                _facing = Mathf.Sign(left);
+            }
+            else _azimuth = _targetAzimuth;
+
+            Vector3 radial = Quaternion.AngleAxis(_azimuth, Vector3.up) * _forward;
+            Vector3 spot = _centre + radial * distance + Vector3.up * heightAboveEyes;
+            _home = spot;
+            Vector3 bob = Vector3.up * (Mathf.Sin(_time * 0.6f) * 0.03f);
+            transform.position = Vector3.Lerp(spot + radial * 1.2f, spot, ease) + bob * ease;
+            // Broadside to the player, nose leading the way it last moved.
+            Vector3 tangent = Vector3.Cross(Vector3.up, radial).normalized * _facing;
+            transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.LookRotation(tangent, Vector3.up), 1f - Mathf.Exp(-1.5f * dt));
         }
 
         Vector3 Point(Vector3 fraction)
@@ -182,12 +213,31 @@ namespace MiniPlanes
         IEnumerator Rest()
         {
             CurrentAttack = Attack.Rest;
-            yield return Wait(_cfg.bossRestSeconds);
+            ChooseNextSpot();
+            float t = 0f;
+            while (t < _cfg.bossRestSeconds || IsMoving)
+            {
+                t += Time.deltaTime;
+                yield return null;
+            }
+        }
+
+        /// <summary>Picks a new spot round the path, randomly left or right, within the front arc.</summary>
+        void ChooseNextSpot()
+        {
+            float swing = Rand(minMoveDeg, maxMoveDeg);
+            float dir = _rng.NextDouble() < 0.5 ? -1f : 1f;
+            float target = _azimuth + dir * swing;
+            // Turn back rather than leave the front arc.
+            if (Mathf.Abs(target) > maxAzimuthDeg) target = _azimuth - dir * swing;
+            _targetAzimuth = Mathf.Clamp(target, -maxAzimuthDeg, maxAzimuthDeg);
+            Moves++;
         }
 
         void Begin(Attack attack)
         {
             CurrentAttack = attack;
+            if (attack == Attack.Missiles) Sfx.Play(SoundKind.MissileLock);
             AttackStarted?.Invoke(this, attack);
         }
 
@@ -215,6 +265,7 @@ namespace MiniPlanes
         /// </summary>
         IEnumerator Trail(Vector3 port, bool wander, bool deadOn)
         {
+            Sfx.Play(SoundKind.GunBurst, Point(port));
             float spread = deadOn ? 0f : _cfg.bossAimSpreadDeg;
             float yaw = Rand(-spread, spread);
             float pitch = Rand(-spread * 0.6f, spread * 0.6f);
@@ -325,6 +376,7 @@ namespace MiniPlanes
         public BossMissile LaunchMissile()
         {
             MissilesLaunched++;
+            Sfx.Play(SoundKind.MissileLaunch, Point(MissileBay));
             Vector3 from = Point(MissileBay);
             Vector3 toward = _plane != null ? _plane.Position - from : (_head != null ? _head.position - from : Vector3.back);
             var go = new GameObject("BossMissile");
