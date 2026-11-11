@@ -36,10 +36,12 @@ except wave coins on `Infinite.asset`.
   its targets and fires fast. Pinch a balloon's crosshair and drag it onto the path.
 - **Booster tubes**: glass tubes about as wide as a C ring, straight or curved, short or long. Pinch one and
   it moves and turns with your hand, like a real object. Line it up where you remember the path goes: flying
-  in one end and out the other boosts the plane for 3 seconds and uses the tube up. The plane touching the wall,
-  or a hand knocking into the tube, breaks it with no boost.
+  in one end and out the other boosts the plane for 3 seconds and uses the tube up. The plane touching the wall
+  breaks it with no boost. Hands never break a tube; otherwise it vanishes when its time runs out.
 - **In Infinite** at most 2 blue balloons come per wave, the gold turret balloon only once every third wave, and
-  booster tubes are capped: 1 in waves 1 and 2, 2 in waves 3 to 5, then 3. Fuel is on from wave 1.
+  booster tubes are capped: none in wave 1, 1 in wave 2, 2 in waves 3 to 5, then 3. Fuel is on from wave 1.
+  The path starts simple and calm in wave 1 and its twists build up slowly: the path's ramp runs at half the
+  speed of the enemies' (`pathRampStretch`), so wave 5 flies what wave 3 used to.
 - **Bluebird** (500): fits its own turret, the same as the gold balloon's, when the first enemy plane of
   each wave shows up. **Pusher Racer** (1000): boosts for 3 seconds at the start of every wave.
 
@@ -62,8 +64,8 @@ In Infinite, **floating islands** appear from wave 4 around you and the path, ne
 crashes into them. Touching one with a hand shatters it into shards that drift slowly in every direction,
 across the path too; a shard hitting the plane also crashes it, and touching a shard turns it to dust.
 
-Every 5th wave is a **boss wave**: a giant zeppelin hangs in the distance and can't be destroyed. It takes
-turns at bullet trails, mostly aimed at the plane (block them with your hands), batches of fighters launched
+Every 5th wave is a **boss wave**: a giant zeppelin hangs in the distance and can't be destroyed. Between
+attacks it cruises a random way, left or right, round the flight path, then takes its next turn at bullet trails, mostly aimed at the plane (block them with your hands), batches of fighters launched
 from its decks, and large tracking missiles. Its aimed trails lead the plane along its path and re-aim every
 round, so they follow it; one trail per barrage is dead on. Hold a missile with an open palm for 1.5 seconds and it drops
 out of the sky; smacking it sets it off, which is only safe far from the plane. The first boss wave has no
@@ -73,6 +75,14 @@ Every level has 3 lives (`lives`). Hits are per life: a low-risk level absorbs a
 
 A level passes when the plane finishes its path with enough ring passes (`requiredRingPasses`). The line
 only ever shows the part of the path still ahead of the plane.
+
+## Sound
+
+Sound effects are in `Assets/MiniPlanes/Audio`, cut from the Skylooper sound collection by
+`Tools/Audio/convert_sfx.sh` (sources and freesound IDs in `Tools/Audio/SOURCES.md`). Clips, volumes and
+which sounds are heard from where they happen are in `Assets/MiniPlanes/Audio/GameSounds.asset`; rebuilding
+the scene keeps your changes. The plane hums with a looping propeller that rises when boosting. Pausing
+pauses world sounds; menu sounds still play.
 
 ## Tuning
 
@@ -170,6 +180,7 @@ HUD, Hangar, stencil reveal, comic VFX, booster tubes, islands and the zeppelin 
 | `Enemies/BoosterTube.cs` | Booster tubes: their shapes, holding, and the clean-pass test. |
 | `Enemies/Zeppelin.cs`, `BossMissile.cs` | The boss and its attacks; palm-held missiles. |
 | `World/FloatingIslands.cs` | Infinite's islands, their shards and dust. |
+| `Audio/GameSounds.cs`, `Audio/Sfx.cs` | The sound list, and the pooled player every event calls. |
 | `UI/CurvedCanvas.cs`, `CurvedGraphic.cs`, `LazyFollow.cs` | Bending uGUI onto a cylinder; smooth follow. |
 | `UI/PokeCanvas.cs`, `PokeButton.cs`, `PokeScrollArea.cs` | Fingertip input for any canvas. |
 | `UI/CurvedHud.cs`, `UI/MenuPanel.cs` | The HUD, and the menu with its intro, result and Hangar pages. |
