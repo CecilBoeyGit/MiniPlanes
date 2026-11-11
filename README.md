@@ -205,7 +205,7 @@ HUD, Hangar, stencil reveal, comic VFX, booster tubes, islands and the zeppelin 
 
 Shaders in `Assets/MiniPlanes/Shaders`: `Matte` (printed polymer), `BubbleRing` (radial fill, wobble,
 peanut merge, finger-shaped outline), `OccludedSilhouette` (solid plane reveal behind hands), `PathLine`,
-`ComicSprite`, `ShieldBubble` (also the tubes' glass), `Trail` (the boost streak). `Matte` can also repaint a model's colourful parts, which the Hangar palettes
+`ComicSprite`, `ShieldBubble` (also the tubes' glass), `Trail` (the boost streak). `UIComic` draws the menu, pause, wrist and splash panels and buttons as solid paint with an ink outline, a top highlight and a bottom shade, read from the `RoundedComic` sprite's channels; `UiComic.Apply` swaps it in at start and adds a `ComicShadow` drop shadow behind each. `Matte` can also repaint a model's colourful parts, which the Hangar palettes
 and the gold balloon use.
 
 The behind-the-hand reveal works in three steps. The hand material writes stencil 1. Aircraft clear it
