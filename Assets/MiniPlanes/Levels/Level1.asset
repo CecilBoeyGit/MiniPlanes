@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9b6c07074e37c71448e96e365f19d72f, type: 3}
   m_Name: Level1
   m_EditorClassIdentifier: Assembly-CSharp::MiniPlanes.LevelConfig
-  defaultsVersion: 9
+  defaultsVersion: 15
   levelName: First Flight
   levelNumber: 1
   introCaption: 'Follow the faint line.
@@ -36,7 +36,9 @@ MonoBehaviour:
   revealMode: 0
   startRevealSeconds: 3
   streakToReveal: 3
-  streakRevealSeconds: 2.5
+  streakRevealSeconds: 6
+  streakGrowSeconds: 2
+  streakFadeSeconds: 1.5
   streakResetSeconds: 12
   pathAlpha: 0.4
   revealFadeSeconds: 0.4
@@ -62,6 +64,8 @@ MonoBehaviour:
   turretBalloonInterval: 0
   maxShieldBalloons: -1
   maxTurretBalloons: -1
+  lifeBalloonInterval: 0
+  maxLifeBalloons: -1
   turretDurationSeconds: 6
   turretRange: 0.75
   turretFireInterval: 0.12
@@ -70,12 +74,16 @@ MonoBehaviour:
   turretShotHomingDeg: 300
   boosterTubeInterval: 0
   maxBoosterTubes: -1
+  maxTubesAtOnce: 2
   boosterTubeLifetime: 24
   boostSpeedMultiplier: 1.7
+  curvedBoostFactor: 1.5
+  straightTubeChance: 0.7
   boostSeconds: 3
   islandCount: 0
-  islandMinSize: 0.06
-  islandMaxSize: 0.12
+  jammingTowers: 0
+  islandMinSize: 0.12
+  islandMaxSize: 0.24
   islandPathClearance: 0.06
   bossLevel: 0
   bossMissiles: 0
@@ -104,6 +112,7 @@ MonoBehaviour:
   bombArmProximity: 0.18
   bombFuseSeconds: 2
   bombBlastRadius: 0.3
-  bombCoverDistance: 0.13
-  bombCoverHoldSeconds: 0.2
+  bombCoverDistance: 0.18
+  bombCoverOpposition: 0.1
+  bombCoverHoldSeconds: 0.12
   bombLifetime: 18

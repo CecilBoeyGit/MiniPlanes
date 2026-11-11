@@ -86,8 +86,20 @@ namespace MiniPlanes.Editor
             art.shieldIcon = ui.shieldIcon;
             art.bombIcon = ui.bombIcon;
             art.turretIcon = ui.turretIcon;
+            art.lifeIcon = ui.lifeIcon;
+            art.jamIcon = ui.jamIcon;
+            art.uiGlassSprite = MiniPlanesUiSprites.Load("RoundedGlass");
+            art.noTouchIcon = ui.noTouchIcon;
+            art.cupIcon = ui.cupIcon;
+            art.dragCursor = ui.dragCursor;
             art.crosshair = ui.crosshair;
             art.fuelGauge = ui.fuelGauge;
+            art.captionIcons = new[]
+            {
+                CaptionIcon("shield", "ShieldIcon"), CaptionIcon("turret", "TurretIcon"), CaptionIcon("life", "LifeIcon"), CaptionIcon("bomb", "BombIcon"),
+                CaptionIcon("tube", "TubeIcon"), CaptionIcon("fighter", "FighterIcon"), CaptionIcon("bomber", "BomberIcon"),
+                CaptionIcon("zeppelin", "ZeppelinIcon"), CaptionIcon("missile", "MissileIcon")
+            };
             EditorUtility.SetDirty(art);
 
             var hud = Place<CurvedHud>(ui.hud);
@@ -99,6 +111,11 @@ namespace MiniPlanes.Editor
             menu.SetHead(head);
             menu.SetHands(handSources);
             Dirty(menu);
+
+            var splash = Place<SplashPanel>(ui.splash);
+            splash.SetHead(head);
+            splash.SetHands(handSources);
+            Dirty(splash);
 
             var pause = Place<PausePanel>(ui.pause);
             pause.SetHead(head);
@@ -114,6 +131,7 @@ namespace MiniPlanes.Editor
             gm.catalog = catalog;
             gm.sounds = sounds;
             gm.pausePanel = pause;
+            gm.splash = splash;
             gm.wristMenu = wrist;
             gm.head = head;
             gm.art = art;
@@ -148,6 +166,11 @@ namespace MiniPlanes.Editor
                 if (part != null) PrefabUtility.RecordPrefabInstancePropertyModifications(part);
         }
 
+        static InlineIcons.Entry CaptionIcon(string key, string sprite)
+        {
+            return new InlineIcons.Entry { key = key, sprite = MiniPlanesUiSprites.Load(sprite) };
+        }
+
         const string SoundsPath = "Assets/MiniPlanes/Audio/GameSounds.asset";
 
         /// <summary>
@@ -166,8 +189,8 @@ namespace MiniPlanes.Editor
             // kind, file, volume, spatial, shortest gap between repeats
             var defaults = new (SoundKind kind, string file, float volume, bool spatial, float gap)[]
             {
-                (SoundKind.RingPass, "ring_pass", 0.7f, true, 0.05f),
-                (SoundKind.RingBigO, "ring_big_o", 0.75f, true, 0.05f),
+                (SoundKind.RingPass, "ring_pass", 0.8f, true, 0.05f),
+                (SoundKind.RingBigO, "ring_big_o", 0.85f, true, 0.05f),
                 (SoundKind.RingClip, "ring_clip", 0.6f, true, 0.2f),
                 (SoundKind.PlaneHit, "plane_hit", 0.8f, true, 0.1f),
                 (SoundKind.PlaneCrash, "plane_crash", 0.8f, true, 0.2f),
@@ -200,6 +223,12 @@ namespace MiniPlanes.Editor
                 (SoundKind.LevelFailed, "level_failed", 0.7f, false, 0.5f),
                 (SoundKind.Purchase, "purchase", 0.7f, false, 0.3f),
                 (SoundKind.Reward, "reward", 0.6f, false, 0.5f),
+                (SoundKind.EnemyExplode, "enemy_explode", 0.7f, true, 0.08f),
+                (SoundKind.FighterEngine, "enemy_engine_jet", 0.5f, true, 0f),
+                (SoundKind.BomberEngine, "enemy_engine_prop", 0.6f, true, 0f),
+                (SoundKind.StreakReveal, "streak_reveal", 0.75f, false, 0.5f),
+                (SoundKind.EnemyWarning, "enemy_warning", 0.7f, false, 1f),
+                (SoundKind.LifeUp, "life_up", 0.7f, false, 0.3f),
             };
             var list = new List<SoundEntry>(gs.sounds ?? new SoundEntry[0]);
             foreach (var d in defaults)
@@ -214,8 +243,36 @@ namespace MiniPlanes.Editor
                 if (entry.clip == null) entry.clip = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/MiniPlanes/Audio/" + d.file + ".ogg");
             }
             gs.sounds = list.ToArray();
+            if (gs.music == null) gs.music = CreateMusic();
             EditorUtility.SetDirty(gs);
             return gs;
+        }
+
+        const string MusicPath = "Assets/MiniPlanes/Audio/GameMusic.asset";
+
+        /// <summary>The background music list. Only empty slots are filled, so your changes are kept.</summary>
+        static GameMusic CreateMusic()
+        {
+            EnsureFolder("Assets/MiniPlanes/Audio/Music");
+            var gm = AssetDatabase.LoadAssetAtPath<GameMusic>(MusicPath);
+            if (gm == null)
+            {
+                gm = ScriptableObject.CreateInstance<GameMusic>();
+                AssetDatabase.CreateAsset(gm, MusicPath);
+            }
+            AudioClip Clip(AudioClip current, string file) =>
+                current != null ? current : AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/MiniPlanes/Audio/Music/" + file + ".ogg");
+            gm.startMenu = Clip(gm.startMenu, "bgm_title");
+            gm.startMenuIntro = Clip(gm.startMenuIntro, "bgm_title_intro");
+            gm.menu = Clip(gm.menu, "bgm_menu");
+            gm.normal = Clip(gm.normal, "bgm_normal");
+            gm.hostile = Clip(gm.hostile, "bgm_hostile");
+            gm.uprise = Clip(gm.uprise, "bgm_uprise");
+            gm.boss = Clip(gm.boss, "bgm_boss");
+            gm.riser = Clip(gm.riser, "riser");
+            gm.climax = Clip(gm.climax, "climax");
+            EditorUtility.SetDirty(gm);
+            return gm;
         }
 
         const string CatalogPath = "Assets/MiniPlanes/Levels/Planes.asset";
@@ -372,11 +429,15 @@ namespace MiniPlanes.Editor
             art.bomberMatte = TexturedMatte("BomberMatte", "EnemyBomber");
             art.turretMatte = TexturedMatte("TurretMatte", "Turret");
             art.zeppelinMatte = TexturedMatte("ZeppelinMatte", "EnemyZeppelin");
+            art.jammingTowerMatte = TexturedMatte("JammingTowerMatte", "JammingTower");
             art.turretShot = Matte("TurretShot", new Color(1f, 0.72f, 0.16f, 1f), false, 0, StencilOp.Replace, 2000, 0f);
             art.handRock = Matte("HandRock", new Color(0.62f, 0.6f, 0.57f, 1f), false, 1, StencilOp.Replace, 1990, 0.05f);
             art.projectile = Matte("Projectile", new Color(1f, 0.82f, 0.3f, 1f), false, 0, StencilOp.Replace, 2000, 0f);
             art.bossBullet = Matte("BossBullet", new Color(1f, 0.42f, 0.3f, 1f), false, 0, StencilOp.Replace, 2000, 0f);
             art.boostTrail = Plain("BoostTrail", "MiniPlanes/Trail");
+            art.uiGlass = Plain("UiGlass", "MiniPlanes/UIGlass");
+            art.uiGlass.SetFloat("_TintStrength", 0.78f);
+            art.uiGlass.SetFloat("_Opacity", 0.8f);
             art.tubeGlass = Plain("TubeGlass", "MiniPlanes/ShieldBubble");
             art.tubeGlass.SetColor("_BaseColor", new Color(1f, 0.78f, 0.45f, 1f));
             art.tubeGlass.SetFloat("_Alpha", 0.85f);
@@ -396,6 +457,7 @@ namespace MiniPlanes.Editor
             art.balloonTurret = Model("BalloonTurret");
             art.turret = Model("Turret");
             art.zeppelin = Model("EnemyZeppelin");
+            art.jammingTower = Model("JammingTower");
 
             art.ringOnset = Vfx("ring_onset");
             art.ringPeak = Vfx("ring_peak");

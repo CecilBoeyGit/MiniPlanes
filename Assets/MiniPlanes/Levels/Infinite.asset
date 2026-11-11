@@ -25,6 +25,10 @@ MonoBehaviour:
   capArcDeg: 165
   lives: 3
   coinsPerWave: 5
+  respawnBaseCost: 50
+  respawnCostStep: 50
+  respawnCostPerWave: 10
+  respawnLives: 1
   startTurnRadius: 0.145
   capTurnRadius: 0.08
   loopsFromWave: 8
@@ -33,11 +37,14 @@ MonoBehaviour:
   shieldInterval: 14
   maxShieldsPerWave: 2
   turretEveryWaves: 3
+  lifeEveryWaves: 2
   tubesFromWave: 2
-  maxTubesPerWave: 3
+  maxTubesPerWave: 2
   islandsFromWave: 4
   startIslands: 3
   capIslands: 8
+  towerStepWaves: 3
+  capTowers: 3
   bossEvery: 5
   bossMissilesFrom: 2
   bossWaveDurationSeconds: 48
