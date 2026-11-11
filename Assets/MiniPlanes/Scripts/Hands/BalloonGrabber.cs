@@ -111,7 +111,7 @@ namespace MiniPlanes
             foreach (var t in BoosterTube.Active)
             {
                 if (t == null || !t.CanGrabAt(point)) continue;
-                float d = Mathf.Max(0f, t.SurfaceDistance(point));
+                float d = Mathf.Max(0f, Mathf.Min(Vector3.Distance(point, t.CursorPosition), t.SurfaceDistance(point)));
                 if (d < bestTubeDist)
                 {
                     bestTubeDist = d;

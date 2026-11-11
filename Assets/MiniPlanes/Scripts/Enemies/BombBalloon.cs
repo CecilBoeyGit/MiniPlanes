@@ -33,6 +33,9 @@ namespace MiniPlanes
         public bool IsAlive => CurrentState != State.Done;
         public bool WasContained { get; private set; }
         public Vector3 Position => transform.position;
+        /// <summary>How far along the path the plane passes closest, and how close. For tests.</summary>
+        public float PassAt => _passAt;
+        public float PassMiss => _passMiss;
 
         LevelConfig _cfg;
         MiniPlane _plane;
@@ -45,6 +48,7 @@ namespace MiniPlanes
         float _coverTime;
         float _bobPhase;
         Transform _icon;
+        GameArt _art;
         float _passAt = -1f;
         float _passMiss = float.PositiveInfinity;
 
@@ -82,30 +86,26 @@ namespace MiniPlanes
             // Where along its path the plane comes closest, so the fuse can be timed to that moment.
             if (plane != null && plane.Path != null)
             {
+                // Walk the path by real distance: its samples are not evenly spaced along it.
                 var samples = plane.Path.Samples;
                 float best = float.PositiveInfinity;
-                int bestIndex = -1;
-                for (int i = 0; i < samples.Count; i += 2)
+                float along = 0f;
+                for (int i = 0; i < samples.Count; i++)
                 {
+                    if (i > 0) along += Vector3.Distance(samples[i - 1], samples[i]);
                     float d = (samples[i] - position).sqrMagnitude;
                     if (d < best)
                     {
                         best = d;
-                        bestIndex = i;
+                        _passAt = along;
                     }
                 }
-                if (bestIndex >= 0)
-                {
-                    _passMiss = Mathf.Sqrt(best);
-                    _passAt = plane.Path.Length * bestIndex / Mathf.Max(1f, samples.Count - 1f);
-                }
+                if (best < float.PositiveInfinity) _passMiss = Mathf.Sqrt(best);
             }
 
-            if (art != null && art.bombIcon != null)
-            {
-                _icon = Instantiate(art.bombIcon, transform, false).transform;
-                _icon.localPosition = Vector3.up * iconHeight;
-            }
+            _art = art;
+            var idle = art == null ? null : art.noTouchIcon != null ? art.noTouchIcon : art.bombIcon;
+            ShowIcon(idle);
         }
 
         void OnEnable() { Active.Add(this); }
@@ -173,6 +173,7 @@ namespace MiniPlanes
             if (CurrentState != State.Idle) return;
             CurrentState = State.Armed;
             _fuse = _cfg.bombFuseSeconds;
+            if (_art != null && _art.cupIcon != null) ShowIcon(_art.cupIcon);
             Sfx.Play(SoundKind.BombArmed, transform.position);
         }
 
@@ -181,6 +182,19 @@ namespace MiniPlanes
             _block.SetFloat(FlashId, amount);
             _block.SetColor(FlashColorId, new Color(1f, 0.08f, 0.05f));
             foreach (var r in _renderers) if (r != null) r.SetPropertyBlock(_block);
+        }
+
+        /// <summary>The icon above the balloon: don't touch while idle, cup with both hands once it flashes.</summary>
+        public string IconName => _icon != null ? _icon.name : "";
+
+        void ShowIcon(GameObject prefab)
+        {
+            if (_icon != null) Destroy(_icon.gameObject);
+            _icon = null;
+            if (prefab == null) return;
+            _icon = Instantiate(prefab, transform, false).transform;
+            _icon.name = prefab.name;
+            _icon.localPosition = Vector3.up * iconHeight;
         }
 
         /// <summary>Both palms close by, on roughly opposite sides of the balloon.</summary>
@@ -194,7 +208,18 @@ namespace MiniPlanes
             Vector3 db = b - p;
             float reach = _cfg.bombCoverDistance;
             if (da.sqrMagnitude > reach * reach || db.sqrMagnitude > reach * reach) return false;
-            return Vector3.Dot(da.normalized, db.normalized) < -0.2f;
+            return Vector3.Dot(da.normalized, db.normalized) < _cfg.bombCoverOpposition;
+        }
+
+        /// <summary>A palm is near enough to be closing in on a cup, so a brush shouldn't set the balloon off.</summary>
+        bool PalmCupping()
+        {
+            if (_hands == null) return false;
+            float reach = _cfg.bombCoverDistance * 1.25f;
+            foreach (var h in _hands)
+                if (h != null && h.IsTracked && h.TryGetJoint(HandJoint.Palm, out var palm) && (palm - transform.position).sqrMagnitude < reach * reach)
+                    return true;
+            return false;
         }
 
         /// <summary>Called when a hand's bone capsules touch the balloon.</summary>
@@ -202,7 +227,7 @@ namespace MiniPlanes
         {
             if (!IsAlive) return;
             // Cupping hands naturally brush the balloon: that is containment, not an accident.
-            if (CurrentState == State.Armed && BothHandsCovering()) return;
+            if (CurrentState == State.Armed && (BothHandsCovering() || PalmCupping())) return;
             Detonate();
         }
 

@@ -51,6 +51,9 @@ namespace MiniPlanes
             var rng = new System.Random(seed);
 
             BuildModel(rng);
+            _propellers.Clear();
+            foreach (var t in GetComponentsInChildren<Transform>(true))
+                if (t != transform && t.name.StartsWith("Propeller", StringComparison.OrdinalIgnoreCase)) _propellers.Add(t);
 
             Speed = StartSpeed();
             _fireTimer = cfg.burstInterval * (0.5f + 0.5f * (float)rng.NextDouble());
@@ -59,9 +62,16 @@ namespace MiniPlanes
             Vector3 toTarget = target != null ? target.Position - transform.position : Vector3.forward;
             Forward = toTarget.sqrMagnitude > 1e-6f ? toTarget.normalized : Vector3.forward;
             transform.rotation = Quaternion.LookRotation(Forward, Vector3.up);
+            // The first enemy plane into a clear sky sounds a warning (not during the zeppelin, which has its alarm).
+            // Jamming towers on the islands silence it until they are knocked out.
+            if (Zeppelin.Current == null && !JammingTower.AnyActive && !Active.Exists(e => e != this && e != null && e.IsAlive))
+                Sfx.Play(SoundKind.EnemyWarning, transform.position);
             IsAlive = true;
+            _engine = Sfx.StartEngine(this is BomberPlane ? SoundKind.BomberEngine : SoundKind.FighterEngine, transform);
             OnSetup(rng);
         }
+
+        AudioSource _engine;
 
         protected virtual void BuildModel(System.Random rng)
         {
@@ -83,6 +93,28 @@ namespace MiniPlanes
         void OnDisable()
         {
             Active.Remove(this);
+        }
+
+        [Tooltip("Propeller spin, in degrees per second. Models whose propellers are separate objects named Propeller... spin.")]
+        public float propellerSpeedDeg = 1600f;
+        readonly List<Transform> _propellers = new List<Transform>();
+
+        void SpinPropellers(float dt)
+        {
+            float speed = IsAlive ? propellerSpeedDeg : propellerSpeedDeg * 0.3f;
+            for (int i = 0; i < _propellers.Count; i++)
+            {
+                var p = _propellers[i];
+                if (p == null) continue;
+                Vector3 axis = p.InverseTransformDirection(transform.forward);
+                // Twin engines turn opposite ways, as on the real thing.
+                p.Rotate(axis, speed * dt * (i % 2 == 0 ? 1f : -1f), Space.Self);
+            }
+        }
+
+        void LateUpdate()
+        {
+            SpinPropellers(Time.deltaTime);
         }
 
         void Update()
@@ -122,7 +154,6 @@ namespace MiniPlanes
             {
                 Target.Damage("rammed by a fighter");
                 ComicVfx.Play(ComicKind.Crash, transform.position, 0.09f);
-                Sfx.Play(SoundKind.SmallBlast, transform.position);
                 Die(Vector3.down * 0.5f);
                 return;
             }
@@ -184,6 +215,9 @@ namespace MiniPlanes
         protected void Die(Vector3 initialVelocity)
         {
             IsAlive = false;
+            Sfx.Play(SoundKind.EnemyExplode, transform.position);
+            Sfx.WindDown(_engine);
+            _engine = null;
             Died?.Invoke(this);
             StartCoroutine(Tumble(initialVelocity));
         }

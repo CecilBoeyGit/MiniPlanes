@@ -12,8 +12,8 @@ namespace MiniPlanes
     public class IslandField : MonoBehaviour
     {
         [Tooltip("Islands sit between these distances from the head, in metres.")]
-        public float minHeadDistance = 0.3f;
-        public float maxHeadDistance = 0.8f;
+        public float minHeadDistance = 0.35f;
+        public float maxHeadDistance = 1.05f;
         [Tooltip("Islands sit within this angle either side of straight ahead, in degrees. Above 90 wraps round the player.")]
         public float halfArcDeg = 110f;
         [Tooltip("Island heights relative to the eyes, in metres.")]
@@ -65,6 +65,32 @@ namespace MiniPlanes
                 island.Setup(size, rng.Next(), _art, _plane, _hands, pos);
                 placed.Add((pos, size));
             }
+            PlaceTowers(cfg, path, rng);
+        }
+
+        /// <summary>
+        /// Stands jamming towers on some of the islands: between one fewer than the wave's number and that
+        /// number, on random islands whose tower would stay clear of the flight path.
+        /// </summary>
+        void PlaceTowers(LevelConfig cfg, CatmullRomPath path, System.Random rng)
+        {
+            if (cfg.jammingTowers <= 0) return;
+            int count = Mathf.Max(1, cfg.jammingTowers - rng.Next(2));
+            var candidates = new List<FloatingIsland>();
+            foreach (var island in FloatingIsland.Active)
+            {
+                if (island == null || !island.IsAlive || island.transform.parent != transform) continue;
+                float h = island.Size * 0.55f;
+                Vector3 middle = island.Position + Vector3.up * (island.Size * 0.04f + h * 0.5f);
+                if (path != null && DistanceToPath(path, middle) < h * 0.5f + cfg.islandPathClearance) continue;
+                candidates.Add(island);
+            }
+            for (int i = 0; i < count && candidates.Count > 0; i++)
+            {
+                int pick = rng.Next(candidates.Count);
+                candidates[pick].AddTower();
+                candidates.RemoveAt(pick);
+            }
         }
 
         public static float DistanceToPath(CatmullRomPath path, Vector3 point)
@@ -80,6 +106,7 @@ namespace MiniPlanes
         {
             FloatingIsland.DestroyAll();
             IslandDebris.DestroyAll();
+            JammingTower.DestroyAll();
         }
     }
 
@@ -94,6 +121,8 @@ namespace MiniPlanes
         public static event Action<FloatingIsland> AnyShattered;
 
         public float Size { get; private set; }
+        /// <summary>The jamming tower standing on this island, if any. It goes when the island shatters.</summary>
+        public JammingTower Tower { get; private set; }
         public bool IsAlive { get; private set; }
         public Vector3 Position => transform.position;
 
@@ -142,6 +171,34 @@ namespace MiniPlanes
             return q.sqrMagnitude < 1f;
         }
 
+        /// <summary>Stands a jamming tower on the island's grassy top.</summary>
+        public JammingTower AddTower()
+        {
+            if (Tower != null) return Tower;
+            var go = new GameObject("JammingTower");
+            go.transform.SetParent(transform, false);
+            go.transform.localPosition = Vector3.up * (Size * 0.5f * 0.06f);
+            // The tower takes the island's top: rebuild the same island without its trees.
+            var mesh = transform.Find("Mesh");
+            if (mesh != null)
+            {
+                // Replay Setup's draws (bob phase, turn) so the rock keeps its shape.
+                var rng = new System.Random(_seed);
+                rng.NextDouble();
+                rng.NextDouble();
+                mesh.GetComponent<MeshFilter>().sharedMesh = IslandMeshes.Island(Size * 0.5f, rng, false);
+            }
+            Tower = go.AddComponent<JammingTower>();
+            Tower.Setup(this, _art, Size);
+            return Tower;
+        }
+
+        /// <summary>The island or its tower contains the point, grown by a margin.</summary>
+        bool Touches(Vector3 world, float margin)
+        {
+            return Contains(world, margin) || (Tower != null && Tower.Contains(world, margin));
+        }
+
         /// <summary>Moves the island somewhere else at once. For tests.</summary>
         public void MoveTo(Vector3 position)
         {
@@ -156,9 +213,9 @@ namespace MiniPlanes
             transform.Rotate(0f, 4f * Time.deltaTime, 0f, Space.World);
             if (GameManager.IsPaused) return;
 
-            if (_plane != null && _plane.IsFlying && Contains(_plane.Position, _plane.Radius))
+            if (_plane != null && _plane.IsFlying && Touches(_plane.Position, _plane.Radius))
             {
-                _plane.Damage("hit a floating island");
+                _plane.Damage(Tower != null && !Contains(_plane.Position, _plane.Radius) ? "hit a jamming tower" : "hit a floating island");
                 Shatter(_plane.Velocity.normalized);
                 return;
             }
@@ -174,6 +231,16 @@ namespace MiniPlanes
                     {
                         Shatter((transform.position - closest).normalized);
                         return;
+                    }
+                    if (Tower != null)
+                    {
+                        Vector3 towerAxis = Tower.transform.position + Vector3.up * Tower.Height * 0.5f;
+                        Vector3 nearTower = ClosestOnSegment(towerAxis, seg.Start, seg.End);
+                        if (Tower.Contains(nearTower, seg.Radius))
+                        {
+                            Shatter((towerAxis - nearTower).normalized);
+                            return;
+                        }
                     }
                 }
             }
@@ -193,7 +260,7 @@ namespace MiniPlanes
             if (!IsAlive) return;
             IsAlive = false;
             var rng = new System.Random(_seed ^ 0x5f3759);
-            int pieces = 5 + rng.Next(4);
+            int pieces = 6 + rng.Next(5);
             float r = Size * 0.5f;
             for (int i = 0; i < pieces; i++)
             {
@@ -204,9 +271,11 @@ namespace MiniPlanes
                 var go = new GameObject("IslandDebris");
                 go.transform.SetParent(transform.parent, false);
                 var debris = go.AddComponent<IslandDebris>();
-                debris.Setup(Mathf.Lerp(0.18f, 0.3f, (float)rng.NextDouble()) * Size, rng.Next(), _art, _plane, _hands, at, velocity);
+                debris.Setup(Mathf.Lerp(0.14f, 0.24f, (float)rng.NextDouble()) * Size, rng.Next(), _art, _plane, _hands, at, velocity);
             }
-            ComicVfx.Play(ComicKind.Crash, transform.position, Size * 1.4f);
+            ComicVfx.Play(ComicKind.Smoke, transform.position, Size * 1.6f);
+            if (Tower != null) ComicVfx.Play(ComicKind.Smoke, Tower.Top, Tower.Height * 1.4f);
+            ComicVfx.Play(ComicKind.Dust, transform.position + Vector3.down * Size * 0.25f, Size * 1.1f);
             Sfx.Play(SoundKind.IslandShatter, transform.position);
             AnyShattered?.Invoke(this);
             Destroy(gameObject);
@@ -321,7 +390,7 @@ namespace MiniPlanes
         {
             IsAlive = false;
             Sfx.Play(SoundKind.Dust, transform.position);
-            ComicVfx.Play(ComicKind.Poof, transform.position, _size * 2.2f);
+            ComicVfx.Play(ComicKind.Dust, transform.position, _size * 2.4f);
             Destroy(gameObject);
         }
 
@@ -371,7 +440,7 @@ namespace MiniPlanes
         }
 
         /// <summary>A grassy disc on a rocky cone, about two radii across, its top at y = 0.</summary>
-        public static Mesh Island(float radius, System.Random rng)
+        public static Mesh Island(float radius, System.Random rng, bool trees = true)
         {
             var b = new Builder();
             int n = 10;
@@ -400,8 +469,9 @@ namespace MiniPlanes
                 b.Tri(mid[i], mid[j], tip, Stone, Stone, Stone);
             }
 
-            int trees = rng.Next(3);
-            for (int k = 0; k < trees; k++)
+            int treeCount = rng.Next(3);
+            if (!trees) treeCount = 0;
+            for (int k = 0; k < treeCount; k++)
             {
                 float a = (float)rng.NextDouble() * Mathf.PI * 2f;
                 Vector3 at = new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a)) * radius * Mathf.Lerp(0.15f, 0.5f, (float)rng.NextDouble()) + top * 0.5f;

@@ -8,8 +8,9 @@ namespace MiniPlanes
 
     /// <summary>
     /// A booster tube powerup: a glass tube about as wide as a C ring, straight or curved, short or long.
-    /// Pinch it to pick it up; it keeps its angle in your hand, like a real object, so you can line it up
-    /// with where you remember the path goes. The plane flying in one end and out the other without
+    /// Pinch its drag cursor, or the tube itself, to pick it up. The cursor follows the hand at once and the
+    /// tube glides after it, turning with the hand, so you can line it up with where you remember the path
+    /// goes. The plane flying in one end and out the other without
     /// touching the wall gets a speed boost, and the tube is used up. The plane touching the wall breaks the
     /// tube with no boost. Hands never break it: it only goes when its time runs out or the plane meets it.
     /// </summary>
@@ -25,15 +26,17 @@ namespace MiniPlanes
         static readonly int AlphaId = Shader.PropertyToID("_Alpha");
         static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
 
-        [Tooltip("Inside radius of the tube, in metres. About the size of a C ring.")]
-        public float innerRadius = 0.036f;
+        [Tooltip("Inside radius of the tube, in metres. Roomy, so the plane passes through easily.")]
+        public float innerRadius = 0.05f;
         public float wallThickness = 0.006f;
         [Tooltip("Share of the plane's collision radius that counts against the wall. Below 1 forgives wingtips.")]
         public float wallMarginPerPlaneRadius = 0.6f;
         [Tooltip("A pinch this close to the tube's surface picks it up, in metres.")]
         public float grabReach = 0.035f;
-        [Tooltip("How quickly a held tube catches up with the hand. Higher is stiffer.")]
-        public float followSharpness = 25f;
+        [Tooltip("How slowly the tube glides after its drag cursor: seconds to cover most of the way.")]
+        public float dragFollowSeconds = 0.6f;
+        [Tooltip("A pinch this close to the drag cursor picks the tube up, in metres.")]
+        public float cursorGrabRadius = 0.07f;
         public Color rimColor = new Color(1f, 0.56f, 0.22f, 1f);
         public Color glassColor = new Color(1f, 0.78f, 0.45f, 1f);
 
@@ -45,6 +48,11 @@ namespace MiniPlanes
         /// <summary>Bend radius of a curved tube; 0 for a straight one.</summary>
         public float BendRadius { get; private set; }
         public bool PlaneInside => _state == PassState.Inside;
+        /// <summary>The speed multiplier a clean pass gives: curved tubes boost harder.</summary>
+        public float BoostMultiplier => _cfg == null ? 1f : BendRadius > 0f ? _cfg.boostSpeedMultiplier * _cfg.curvedBoostFactor : _cfg.boostSpeedMultiplier;
+        /// <summary>Where the drag cursor is: on the hand while held, otherwise where the tube was put down.</summary>
+        public Vector3 CursorPosition => _cursorPos;
+        public bool HasCursor => _cursor != null;
         /// <summary>Seconds before the tube vanishes by itself. Holding it pauses the count.</summary>
         public float TimeLeft => _life;
         public Vector3 Position => transform.position;
@@ -68,6 +76,10 @@ namespace MiniPlanes
         MeshRenderer _glass;
         MaterialPropertyBlock _glassBlock;
         float _glassAlpha = 0.85f;
+        Vector3 _cursorPos;
+        Transform _cursor;
+        CanvasGroup _cursorFade;
+        LineRenderer _tether;
 
 
         /// <summary>Length and bend radius of each shape, in metres.</summary>
@@ -75,10 +87,10 @@ namespace MiniPlanes
         {
             switch (shape)
             {
-                case TubeShape.StraightShort: length = 0.09f; bendRadius = 0f; break;
-                case TubeShape.StraightLong: length = 0.17f; bendRadius = 0f; break;
-                case TubeShape.CurvedShort: length = 0.12f; bendRadius = 0.14f; break;
-                default: length = 0.21f; bendRadius = 0.16f; break;
+                case TubeShape.StraightShort: length = 0.06f; bendRadius = 0f; break;
+                case TubeShape.StraightLong: length = 0.11f; bendRadius = 0f; break;
+                case TubeShape.CurvedShort: length = 0.08f; bendRadius = 0.1f; break;
+                default: length = 0.14f; bendRadius = 0.11f; break;
             }
         }
 
@@ -98,6 +110,8 @@ namespace MiniPlanes
             BendRadius = bend;
             BuildCentreline();
             BuildVisuals(art);
+            _cursorPos = position;
+            BuildCursor(art);
             IsAlive = true;
         }
 
@@ -182,6 +196,57 @@ namespace MiniPlanes
             block.SetFloat("_UseVertexColor", 0f);
             block.SetColor(BaseColorId, rimColor);
             rim.SetPropertyBlock(block);
+        }
+
+        void BuildCursor(GameArt art)
+        {
+            if (art != null && art.dragCursor != null)
+            {
+                _cursor = Instantiate(art.dragCursor, transform.parent, false).transform;
+                _cursor.name = "TubeDragCursor";
+                _cursorFade = _cursor.GetComponentInChildren<CanvasGroup>();
+                foreach (var g in _cursor.GetComponentsInChildren<UnityEngine.UI.Graphic>())
+                    g.color = new Color(rimColor.r, rimColor.g, rimColor.b, g.color.a);
+            }
+            if (art != null && art.pathLine != null)
+            {
+                var line = new GameObject("Tether");
+                line.transform.SetParent(transform, false);
+                _tether = line.AddComponent<LineRenderer>();
+                _tether.sharedMaterial = art.pathLine;
+                _tether.positionCount = 2;
+                _tether.widthMultiplier = 0.0015f;
+                _tether.useWorldSpace = true;
+                _tether.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                _tether.receiveShadows = false;
+                _tether.enabled = false;
+            }
+            UpdateCursor();
+        }
+
+        void OnDestroy()
+        {
+            if (_cursor != null) Destroy(_cursor.gameObject);
+        }
+
+        void UpdateCursor()
+        {
+            if (_cursor != null)
+            {
+                _cursor.position = _cursorPos;
+                _cursor.localScale = Vector3.one * (IsHeld ? 1.15f : 1f + 0.08f * Mathf.Sin(Time.time * 4f));
+                if (_cursorFade != null) _cursorFade.alpha = Mathf.Clamp01(_life / 2f);
+            }
+            if (_tether != null)
+            {
+                bool show = Vector3.Distance(transform.position, _targetPos) > 0.02f;
+                _tether.enabled = show;
+                if (show)
+                {
+                    _tether.SetPosition(0, transform.position);
+                    _tether.SetPosition(1, _cursorPos);
+                }
+            }
         }
 
         void AddRing(List<CombineInstance> list, int index, float major, float minor)
@@ -277,7 +342,13 @@ namespace MiniPlanes
 
         public bool CanGrabAt(Vector3 world)
         {
-            return IsAlive && !IsHeld && SurfaceDistance(world) < grabReach;
+            return IsAlive && !IsHeld && GrabDistance(world) < 0f;
+        }
+
+        /// <summary>Below zero when a pinch here picks the tube up: near its drag cursor or its wall.</summary>
+        public float GrabDistance(Vector3 world)
+        {
+            return Mathf.Min(Vector3.Distance(world, _cursorPos) - cursorGrabRadius, SurfaceDistance(world) - grabReach);
         }
 
         /// <summary>Picks the tube up, keeping where it sits relative to the hand.</summary>
@@ -285,14 +356,14 @@ namespace MiniPlanes
         {
             _holder = holder;
             Quaternion inv = Quaternion.Inverse(handRot);
-            _grabPosOffset = inv * (transform.position - handPos);
-            _grabRotOffset = inv * transform.rotation;
-            _targetPos = transform.position;
-            _targetRot = transform.rotation;
+            _grabPosOffset = inv * (_targetPos - handPos);
+            _grabRotOffset = inv * _targetRot;
+            _cursorPos = handPos;
         }
 
         public void Drag(Vector3 handPos, Quaternion handRot)
         {
+            _cursorPos = handPos;
             _targetPos = handPos + handRot * _grabPosOffset;
             _targetRot = handRot * _grabRotOffset;
         }
@@ -308,6 +379,7 @@ namespace MiniPlanes
             transform.SetPositionAndRotation(position, rotation);
             _targetPos = position;
             _targetRot = rotation;
+            _cursorPos = position;
             _prevValid = false;
             _state = PassState.Outside;
         }
@@ -323,13 +395,12 @@ namespace MiniPlanes
             if (!IsAlive) return;
             float dt = Time.deltaTime;
 
-            if (IsHeld)
-            {
-                float k = 1f - Mathf.Exp(-followSharpness * dt);
-                transform.SetPositionAndRotation(Vector3.Lerp(transform.position, _targetPos, k),
-                    Quaternion.Slerp(transform.rotation, _targetRot, k));
-            }
-            else
+            // Glide after the drag cursor, held or just let go.
+            float k = 1f - Mathf.Exp(-3f * dt / Mathf.Max(0.05f, dragFollowSeconds));
+            transform.SetPositionAndRotation(Vector3.Lerp(transform.position, _targetPos, k),
+                Quaternion.Slerp(transform.rotation, _targetRot, k));
+            UpdateCursor();
+            if (!IsHeld)
             {
                 _life -= dt;
                 if (_life <= 0f)
@@ -424,7 +495,7 @@ namespace MiniPlanes
 
         void Pass()
         {
-            if (_cfg != null) _plane.Boost(_cfg.boostSeconds, _cfg.boostSpeedMultiplier);
+            if (_cfg != null) _plane.Boost(_cfg.boostSeconds, BoostMultiplier);
             ComicVfx.Play(ComicKind.RingPass, _plane.Position);
             IsAlive = false;
             AnyBoosted?.Invoke(this);

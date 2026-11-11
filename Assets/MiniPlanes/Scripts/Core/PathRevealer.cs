@@ -15,6 +15,8 @@ namespace MiniPlanes
         static readonly int AlphaId = Shader.PropertyToID("_Alpha");
         static readonly int TrimId = Shader.PropertyToID("_Trim");
         static readonly int TrimFadeId = Shader.PropertyToID("_TrimFade");
+        static readonly int ReachId = Shader.PropertyToID("_Reach");
+        static readonly int ReachFadeId = Shader.PropertyToID("_ReachFade");
 
         [Tooltip("Width of the line, in metres.")]
         public float lineWidth = 0.0028f;
@@ -28,6 +30,11 @@ namespace MiniPlanes
         public int Streak { get; private set; }
         public float CurrentAlpha { get; private set; }
         public bool IsRevealing => _active && (_alwaysOn || Time.time < _visibleUntil || debugAlwaysShow);
+        /// <summary>How far along the path (0 to 1) the line is drawn: below 1 while a streak reveal grows.</summary>
+        public float Reach { get; private set; } = 1f;
+        /// <summary>A streak reveal is playing: growing, holding or fading out.</summary>
+        public bool StreakRevealing => _streakAt >= 0f && Time.time < _visibleUntil;
+
         /// <summary>Distance along the path where the drawn line starts. Everything before it is hidden.</summary>
         public float VisibleFromDistance { get; private set; }
 
@@ -40,6 +47,8 @@ namespace MiniPlanes
         bool _alwaysOn;
         float _visibleUntil;
         float _lastRingTime;
+        float _streakAt = -1f;
+        float _streakFrom;
 
         void Awake()
         {
@@ -62,6 +71,8 @@ namespace MiniPlanes
             _pathLength = Mathf.Max(0.01f, path.Length);
             _active = true;
             Streak = 0;
+            _streakAt = -1f;
+            Reach = 1f;
             _lastRingTime = Time.time;
             _alwaysOn = cfg.revealMode == PathRevealMode.AlwaysVisible;
             // Stays on until OnTakeOff starts the timed part.
@@ -91,7 +102,11 @@ namespace MiniPlanes
             if (_cfg.revealMode == PathRevealMode.TimedAtStart && _cfg.streakToReveal > 0 && Streak >= _cfg.streakToReveal)
             {
                 Streak = 0;
-                _visibleUntil = Mathf.Max(_visibleUntil, Time.time + _cfg.streakRevealSeconds);
+                // Grow from where the plane is now out to the end of the path, hold, then fade away.
+                _streakAt = Time.time;
+                _streakFrom = _plane != null && _plane.Path != null ? Mathf.Clamp01((_plane.Distance + gapAheadOfPlane) / _pathLength) : 0f;
+                _visibleUntil = Time.time + _cfg.streakRevealSeconds;
+                Sfx.Play(SoundKind.StreakReveal);
             }
         }
 
@@ -109,10 +124,29 @@ namespace MiniPlanes
 
         void Update()
         {
-            float target = IsRevealing && _cfg != null ? _cfg.pathAlpha : 0f;
-            float fade = _cfg != null ? Mathf.Max(0.01f, _cfg.revealFadeSeconds) : 0.3f;
-            float full = _cfg != null ? Mathf.Max(0.01f, _cfg.pathAlpha) : 1f;
-            CurrentAlpha = Mathf.MoveTowards(CurrentAlpha, target, full / fade * Time.deltaTime);
+            if (StreakRevealing && _cfg != null)
+            {
+                // A streak reveal sets its own brightness: on at once while it grows, then fading to nothing.
+                float age = Time.time - _streakAt;
+                float grow = Mathf.Clamp01(age / Mathf.Max(0.01f, _cfg.streakGrowSeconds));
+                Reach = Mathf.Lerp(_streakFrom, 1f, 1f - (1f - grow) * (1f - grow));
+                float left = _visibleUntil - Time.time;
+                CurrentAlpha = _cfg.pathAlpha * Mathf.Clamp01(left / Mathf.Max(0.01f, _cfg.streakFadeSeconds));
+            }
+            else
+            {
+                if (_streakAt >= 0f)
+                {
+                    // The streak reveal has run out: gone completely, not easing back.
+                    _streakAt = -1f;
+                    if (!_alwaysOn) CurrentAlpha = 0f;
+                }
+                Reach = 1f;
+                float target = IsRevealing && _cfg != null ? _cfg.pathAlpha : 0f;
+                float fade = _cfg != null ? Mathf.Max(0.01f, _cfg.revealFadeSeconds) : 0.3f;
+                float full = _cfg != null ? Mathf.Max(0.01f, _cfg.pathAlpha) : 1f;
+                CurrentAlpha = Mathf.MoveTowards(CurrentAlpha, target, full / fade * Time.deltaTime);
+            }
 
             bool show = CurrentAlpha > 0.001f;
             if (_line.enabled != show) _line.enabled = show;
@@ -124,6 +158,8 @@ namespace MiniPlanes
             _block.SetFloat(AlphaId, CurrentAlpha);
             _block.SetFloat(TrimId, VisibleFromDistance / _pathLength);
             _block.SetFloat(TrimFadeId, Mathf.Max(startFadeLength, 0.001f) / _pathLength);
+            _block.SetFloat(ReachId, Mathf.Max(Reach, VisibleFromDistance / _pathLength));
+            _block.SetFloat(ReachFadeId, 0.04f / _pathLength);
             _line.SetPropertyBlock(_block);
         }
     }

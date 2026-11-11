@@ -26,6 +26,8 @@ namespace MiniPlanes
         public CurvedHud hud;
         public MenuPanel menu;
         public PausePanel pausePanel;
+        [Tooltip("The opening logo and Start button, shown once when the game starts.")]
+        public SplashPanel splash;
         public WristMenuButton wristMenu;
         public PathRevealer revealer;
         public EnemySpawner spawner;
@@ -67,6 +69,8 @@ namespace MiniPlanes
         [Header("Timing")]
         [Tooltip("Seconds between a flight ending and the result panel appearing.")]
         public float resultDelaySeconds = 1.6f;
+        [Tooltip("How long the start menu takes to fade in after the splash screen, in seconds.")]
+        public float menuFadeInSeconds = 0.6f;
         [Tooltip("Countdown after Start is pressed, in seconds.")]
         public float startCountdownSeconds = 2f;
 
@@ -91,6 +95,12 @@ namespace MiniPlanes
         public int LivesTotal { get; private set; }
         /// <summary>Coins earned since the level or Infinite run began.</summary>
         public int CoinsThisRun { get; private set; }
+        /// <summary>Respawns bought in the current Infinite run. Each one costs more.</summary>
+        public int RespawnsBought { get; private set; }
+        /// <summary>The price of the next respawn in this Infinite run.</summary>
+        public int RespawnCost => infinite != null ? infinite.RespawnCost(RespawnsBought, Wave) : 0;
+        /// <summary>The game-over page is offering a respawn.</summary>
+        public bool OfferingRespawn { get; private set; }
         public MiniPlane Plane => _plane;
         public LevelConfig CurrentConfig => _cfg;
         public IslandField Islands => _islands;
@@ -106,6 +116,7 @@ namespace MiniPlanes
         IslandField _islands;
         bool _perkTurretPending;
         bool _titlePlayed;
+        bool _respawnBought;
 
         void Awake()
         {
@@ -173,10 +184,19 @@ namespace MiniPlanes
             PlaneTurret.AnyEnemyDowned += OnTurretKill;
             BombBalloon.AnyContained += OnBombContained;
             BossMissile.AnyDefused += OnMissileDefused;
+            PowerBalloon.AnyLifeCollected += OnLifeCollected;
             if (spawner != null)
             {
                 spawner.EnemySpawned += OnEnemySpawned;
                 spawner.ZeppelinSpawned += z => z.AttackStarted += OnBossAttack;
+            }
+
+            if (art != null)
+            {
+                UiGlass.Apply(menu, art.uiGlass, art.uiGlassSprite);
+                UiGlass.Apply(pausePanel, art.uiGlass, art.uiGlassSprite);
+                UiGlass.Apply(wristMenu, art.uiGlass, art.uiGlassSprite);
+                UiGlass.Apply(splash, art.uiGlass, art.uiGlassSprite);
             }
 
             _islands = new GameObject("Islands").AddComponent<IslandField>();
@@ -190,6 +210,7 @@ namespace MiniPlanes
                 menu.RetryChosen += Retry;
                 menu.NextChosen += Next;
                 menu.MenuChosen += ShowMenu;
+                menu.RespawnChosen += BuyRespawn;
                 menu.StartChosen += ConfirmStart;
                 menu.BackChosen += ShowMenu;
                 menu.PlaneChanged += ApplyPlaneSelection;
@@ -210,13 +231,53 @@ namespace MiniPlanes
             PlaneTurret.AnyEnemyDowned -= OnTurretKill;
             BombBalloon.AnyContained -= OnBombContained;
             BossMissile.AnyDefused -= OnMissileDefused;
+            PowerBalloon.AnyLifeCollected -= OnLifeCollected;
             if (IsPaused) Time.timeScale = 1f;
             IsPaused = false;
         }
 
         void Start()
         {
-            ShowMenu();
+            Switch(SplashRoutine());
+        }
+
+        /// <summary>The opening: the logo fades in, then Start, and after it the start menu fades in.</summary>
+        IEnumerator SplashRoutine()
+        {
+            CurrentFlow = Flow.Menu;
+            InInfinite = false;
+            SetGameplayInput(false);
+            Clean();
+            _plane.Hide();
+            HideHud();
+            if (menu != null) menu.Close();
+            if (splash == null)
+            {
+                yield return MenuRoutine(false);
+                yield break;
+            }
+            yield return WaitForHead();
+            _titlePlayed = true;
+            Sfx.Play(SoundKind.Title);
+            bool started = false;
+            System.Action onStart = () => started = true;
+            splash.StartChosen += onStart;
+            splash.Show();
+            while (!started) yield return null;
+            splash.StartChosen -= onStart;
+            yield return MenuRoutine(true);
+        }
+
+        IEnumerator WaitForHead()
+        {
+            float waited = 0f;
+            while (!HeadReady() && waited < 3f)
+            {
+                waited += Time.deltaTime;
+                yield return null;
+            }
+            // Give tracking a moment to settle before placing the panel.
+            yield return null;
         }
 
         void Update()
@@ -246,7 +307,8 @@ namespace MiniPlanes
 
         public void ShowMenu()
         {
-            Switch(MenuRoutine());
+            OfferingRespawn = false;
+            Switch(MenuRoutine(false));
         }
 
         public void StartLevel(int zeroBasedLevel)
@@ -260,6 +322,19 @@ namespace MiniPlanes
         {
             if (!Progression.InfiniteUnlocked) return;
             Switch(InfiniteRoutine());
+        }
+
+        /// <summary>
+        /// The Respawn button on Infinite's game-over page: spends the coins and carries on with the run,
+        /// replaying the wave the plane went down in, with the score kept.
+        /// </summary>
+        public void BuyRespawn()
+        {
+            if (!OfferingRespawn || _respawnBought) return;
+            if (!Progression.SpendCoins(RespawnCost)) return;
+            RespawnsBought++;
+            _respawnBought = true;
+            Sfx.Play(SoundKind.Purchase);
         }
 
         /// <summary>For automated tests: sets the lives left in the current level or run.</summary>
@@ -290,6 +365,7 @@ namespace MiniPlanes
         void Switch(IEnumerator routine)
         {
             EndPause();
+            OfferingRespawn = false;
             if (_flow != null) StopCoroutine(_flow);
             _flow = StartCoroutine(routine);
         }
@@ -348,8 +424,9 @@ namespace MiniPlanes
             hud.SetCaption("");
         }
 
-        IEnumerator MenuRoutine()
+        IEnumerator MenuRoutine(bool fadeIn)
         {
+            if (splash != null && !fadeIn) splash.Close();
             CurrentFlow = Flow.Menu;
             InInfinite = false;
             SetGameplayInput(false);
@@ -365,7 +442,11 @@ namespace MiniPlanes
             }
             // Give tracking a moment to settle before placing the panel.
             yield return null;
-            if (menu != null) menu.ShowStart(levels);
+            if (menu != null)
+            {
+                menu.ShowStart(levels);
+                if (fadeIn) menu.FadeIn(menuFadeInSeconds);
+            }
             if (!_titlePlayed)
             {
                 _titlePlayed = true;
@@ -438,6 +519,7 @@ namespace MiniPlanes
             Score = 0;
             Wave = 0;
             CoinsThisRun = 0;
+            RespawnsBought = 0;
             LivesTotal = Mathf.Max(1, infinite.lives);
             Lives = LivesTotal;
             if (_waveConfig != null) Destroy(_waveConfig);
@@ -447,6 +529,8 @@ namespace MiniPlanes
             _waveConfig.hideFlags = HideFlags.DontSave;
             _cfg = _waveConfig;
 
+            while (true)
+            {
             bool alive = true;
             while (alive)
             {
@@ -470,9 +554,28 @@ namespace MiniPlanes
             SetGameplayInput(false);
             CurrentFlow = Flow.Result;
             if (menu != null)
+            {
+                int cost = RespawnCost;
+                bool affordable = Progression.Coins >= cost;
                 menu.ShowResult(best ? "NEW BEST" : "GAME OVER",
-                    "You reached wave " + Wave + ".\nYour plane " + _plane.LastCrashReason + ".",
+                    "You reached wave " + Wave + ". Your plane " + _plane.LastCrashReason + ".\n" +
+                    (affordable ? "Respawn to carry on from wave " + Wave + "." : "Respawn costs " + cost + " coins. You have " + Progression.Coins + "."),
                     "SCORE  " + Score, best, false, "MENU", CoinsThisRun);
+                menu.OfferRespawn(cost, affordable);
+            }
+
+            // Wait on the page: Retry and Menu leave this routine; Respawn carries on with the run.
+            _respawnBought = false;
+            OfferingRespawn = true;
+            while (!_respawnBought) yield return null;
+            OfferingRespawn = false;
+            if (menu != null) menu.Close();
+            if (hud != null) hud.SetCoins(Progression.Coins);
+            LivesTotal = Mathf.Max(1, infinite.lives);
+            Lives = Mathf.Clamp(infinite.respawnLives, 1, LivesTotal);
+            // Replay the wave the plane went down in.
+            Wave--;
+            }
         }
 
         /// <summary>
@@ -632,6 +735,24 @@ namespace MiniPlanes
         {
             if (CurrentFlow != Flow.Flying) return;
             AddCoins(bombCoverCoins);
+        }
+
+        /// <summary>A heart balloon: one life back, up to the level's full count. At full lives it does nothing.</summary>
+        void OnLifeCollected(PowerBalloon balloon)
+        {
+            if (CurrentFlow != Flow.Flying) return;
+            if (Lives >= LivesTotal)
+            {
+                if (hud != null) hud.SetCaption("LIVES FULL", 1f);
+                return;
+            }
+            Lives++;
+            if (hud != null)
+            {
+                hud.SetLives(Lives, LivesTotal);
+                hud.SetCaption("+1 LIFE", 1.2f);
+            }
+            Sfx.Play(SoundKind.LifeUp);
         }
 
         void OnMissileDefused(BossMissile missile)

@@ -4,7 +4,7 @@ using UnityEngine.UI;
 
 namespace MiniPlanes
 {
-    public enum BalloonKind { Shield, Turret }
+    public enum BalloonKind { Shield, Turret, Life }
 
     /// <summary>
     /// A draggable powerup balloon. A circular crosshair can be pinched and moved anywhere, and the balloon
@@ -14,6 +14,8 @@ namespace MiniPlanes
     public class PowerBalloon : MonoBehaviour
     {
         public static readonly List<PowerBalloon> Active = new List<PowerBalloon>();
+        /// <summary>The plane flew through a heart balloon. GameManager adds the life, if there is room.</summary>
+        public static event System.Action<PowerBalloon> AnyLifeCollected;
 
         static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
 
@@ -25,6 +27,16 @@ namespace MiniPlanes
         public float iconHeight = 0.058f;
         [Tooltip("Without its own model, the gold balloon is the blue one repainted with this.")]
         public PlanePalette goldPaint = new PlanePalette { name = "Gold", hueShift = -0.47f, saturation = 2f, brightness = 1.05f, onlyHue = 0.62f };
+        [Tooltip("The heart balloon is the blue one repainted with this.")]
+        public PlanePalette heartPaint = new PlanePalette { name = "Heart", hueShift = 0.36f, saturation = 1.3f, brightness = 1.08f, onlyHue = 0.62f };
+        [Tooltip("The heart balloon's size and catch radius, as a share of the others'. It is small and harder to catch.")]
+        [Range(0.3f, 1f)] public float heartScale = 0.6f;
+
+        /// <summary>This balloon's height, in metres.</summary>
+        public float Size => Kind == BalloonKind.Life ? size * heartScale : size;
+        /// <summary>How close the plane must pass to catch this balloon, in metres.</summary>
+        public float CatchRadius => Kind == BalloonKind.Life ? catchRadius * heartScale : catchRadius;
+        float IconHeight => Kind == BalloonKind.Life ? iconHeight * heartScale : iconHeight;
 
         public BalloonKind Kind { get; private set; }
         public bool IsAlive { get; private set; }
@@ -46,7 +58,12 @@ namespace MiniPlanes
 
         public static Color TintOf(BalloonKind kind)
         {
-            return kind == BalloonKind.Shield ? new Color(0.35f, 0.68f, 1f) : new Color(1f, 0.78f, 0.2f);
+            switch (kind)
+            {
+                case BalloonKind.Shield: return new Color(0.35f, 0.68f, 1f);
+                case BalloonKind.Life: return new Color(1f, 0.42f, 0.52f);
+                default: return new Color(1f, 0.78f, 0.2f);
+            }
         }
 
         public void Setup(BalloonKind kind, LevelConfig cfg, MiniPlane plane, GameArt art, Vector3 position)
@@ -61,20 +78,21 @@ namespace MiniPlanes
             _bobPhase = Random.value * 6.28f;
             _tint = TintOf(kind);
 
-            bool repaint = kind == BalloonKind.Turret && (art == null || art.balloonTurret == null);
+            bool repaint = kind == BalloonKind.Life || (kind == BalloonKind.Turret && (art == null || art.balloonTurret == null));
             var modelPrefab = art == null ? null : kind == BalloonKind.Turret && art.balloonTurret != null ? art.balloonTurret : art.balloonShield;
             if (modelPrefab != null)
             {
-                var model = ModelUtil.Attach(transform, modelPrefab, art.planeMatte, size, ModelUtil.FitAxis.Height);
-                if (repaint) PlanePaint.Apply(model, goldPaint);
+                var model = ModelUtil.Attach(transform, modelPrefab, art.planeMatte, Size, ModelUtil.FitAxis.Height);
+                if (repaint) PlanePaint.Apply(model, kind == BalloonKind.Life ? heartPaint : goldPaint);
             }
             else BuildFallback(art);
 
-            var iconPrefab = art == null ? null : kind == BalloonKind.Shield ? art.shieldIcon : art.turretIcon;
+            var iconPrefab = art == null ? null : kind == BalloonKind.Shield ? art.shieldIcon : kind == BalloonKind.Life ? art.lifeIcon : art.turretIcon;
             if (iconPrefab != null)
             {
                 _icon = Instantiate(iconPrefab, transform, false).transform;
-                _icon.localPosition = Vector3.up * iconHeight;
+                _icon.localPosition = Vector3.up * IconHeight;
+                if (kind == BalloonKind.Life) _icon.localScale = Vector3.one * Mathf.Lerp(heartScale, 1f, 0.4f);
             }
 
             if (art != null && art.crosshair != null)
@@ -151,7 +169,7 @@ namespace MiniPlanes
             float bob = Mathf.Sin(Time.time * 1.3f + _bobPhase) * 0.004f;
             transform.position = _anchor + Vector3.up * bob;
             // The model is upright; keep the icon level above it.
-            if (_icon != null) _icon.position = transform.position + Vector3.up * iconHeight;
+            if (_icon != null) _icon.position = transform.position + Vector3.up * IconHeight;
 
             // Holding keeps it alive, so a balloon cannot vanish out of the player's fingers.
             if (!IsHeld) _life -= dt;
@@ -162,9 +180,10 @@ namespace MiniPlanes
             }
 
             if (_plane != null && _plane.IsFlying &&
-                Vector3.Distance(transform.position, _plane.Position) < catchRadius + _plane.Radius)
+                Vector3.Distance(transform.position, _plane.Position) < CatchRadius + _plane.Radius)
             {
                 if (Kind == BalloonKind.Shield) _plane.GiveShield();
+                else if (Kind == BalloonKind.Life) AnyLifeCollected?.Invoke(this);
                 else _plane.EquipTurret(_cfg);
                 Pop(ComicKind.ShieldPop);
                 return;

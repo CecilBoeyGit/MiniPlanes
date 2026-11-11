@@ -34,12 +34,13 @@ namespace MiniPlanes
         public int ShieldsSpawned { get; private set; }
         public int TurretsSpawned { get; private set; }
         public int TubesSpawned { get; private set; }
+        public int LivesSpawned { get; private set; }
 
         LevelConfig _cfg;
         MiniPlane _target;
         Vector3 _forward = Vector3.forward;
         bool _active;
-        float _fighterTimer, _bomberTimer, _shieldTimer, _turretTimer, _tubeTimer;
+        float _fighterTimer, _bomberTimer, _shieldTimer, _turretTimer, _tubeTimer, _lifeTimer;
         int _seed;
         System.Random _rng = new System.Random(1);
 
@@ -54,12 +55,13 @@ namespace MiniPlanes
             if (_forward.sqrMagnitude < 1e-4f) _forward = Vector3.forward;
             _forward.Normalize();
             _active = cfg != null;
-            ShieldsSpawned = TurretsSpawned = TubesSpawned = 0;
+            ShieldsSpawned = TurretsSpawned = TubesSpawned = LivesSpawned = 0;
             if (!_active) return;
             _fighterTimer = cfg.fighterSpawnInterval * 0.4f;
             _bomberTimer = cfg.bomberSpawnInterval * 0.5f;
             _shieldTimer = cfg.shieldBalloonInterval * 0.4f;
             _turretTimer = cfg.turretBalloonInterval * 0.6f;
+            _lifeTimer = cfg.lifeBalloonInterval * 0.5f;
             _tubeTimer = cfg.boosterTubeInterval * 0.35f;
             if (cfg.bossLevel > 0) SpawnZeppelin(forward);
         }
@@ -107,10 +109,10 @@ namespace MiniPlanes
                 if (_tubeTimer <= 0f)
                 {
                     _tubeTimer = _cfg.boosterTubeInterval * Jitter();
-                    if (Under(TubesSpawned, _cfg.maxBoosterTubes))
+                    if (Under(TubesSpawned, _cfg.maxBoosterTubes) && Under(BoosterTube.Active.Count, _cfg.maxTubesAtOnce))
                     {
                         TubesSpawned++;
-                        SpawnTube((TubeShape)_rng.Next(4));
+                        SpawnTube(PickTubeShape());
                     }
                 }
             }
@@ -140,7 +142,29 @@ namespace MiniPlanes
                         }
                     }
                 }
+                if (_cfg.lifeBalloonInterval > 0f)
+                {
+                    _lifeTimer -= dt;
+                    if (_lifeTimer <= 0f)
+                    {
+                        _lifeTimer = _cfg.lifeBalloonInterval * Jitter();
+                        if (Under(LivesSpawned, _cfg.maxLifeBalloons))
+                        {
+                            LivesSpawned++;
+                            SpawnBalloon(BalloonKind.Life);
+                        }
+                    }
+                }
             }
+        }
+
+        /// <summary>Straight tubes most of the time, short or long; curved ones less often.</summary>
+        public TubeShape PickTubeShape()
+        {
+            float straight = _cfg != null ? _cfg.straightTubeChance : 0.7f;
+            bool isStraight = _rng.NextDouble() < straight;
+            bool isLong = _rng.NextDouble() < 0.5;
+            return isStraight ? (isLong ? TubeShape.StraightLong : TubeShape.StraightShort) : (isLong ? TubeShape.CurvedLong : TubeShape.CurvedShort);
         }
 
         static bool Under(int count, int max)
@@ -221,7 +245,7 @@ namespace MiniPlanes
         {
             Vector3 pos = PowerupSpawnPoint();
 
-            var go = new GameObject(kind == BalloonKind.Shield ? "ShieldBalloon" : "TurretBalloon");
+            var go = new GameObject(kind + "Balloon");
             go.transform.SetParent(transform, false);
             var balloon = go.AddComponent<PowerBalloon>();
             balloon.Setup(kind, _cfg, _target, art, pos);

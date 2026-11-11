@@ -35,6 +35,25 @@ namespace MiniPlanes
         [Tooltip("Coins for every wave survived.")]
         public int coinsPerWave = 5;
 
+        [Header("Respawn (bought with coins on the game-over page)")]
+        [Tooltip("Coins for the first respawn in a run.")]
+        public int respawnBaseCost = 50;
+        [Tooltip("Each further respawn in the same run costs this much more.")]
+        public int respawnCostStep = 50;
+        [Tooltip("Every wave reached adds this much to the price, so a respawn deep into a run costs more.")]
+        public int respawnCostPerWave = 10;
+        [Tooltip("Lives a respawn gives back.")]
+        public int respawnLives = 1;
+
+        /// <summary>
+        /// The price of the next respawn: the base, plus a step for each respawn already bought in the run, plus
+        /// a little for every wave reached.
+        /// </summary>
+        public int RespawnCost(int bought, int wave)
+        {
+            return Mathf.Max(0, respawnBaseCost + respawnCostStep * Mathf.Max(0, bought) + respawnCostPerWave * Mathf.Max(0, wave - 1));
+        }
+
         [Header("Path")]
         public float startTurnRadius = 0.145f;
         public float capTurnRadius = 0.08f;
@@ -51,15 +70,20 @@ namespace MiniPlanes
         public int maxShieldsPerWave = 2;
         [Tooltip("The gold turret balloon is rare: one, on every this many waves.")]
         public int turretEveryWaves = 3;
+        [Tooltip("The small heart balloon, which gives a life back: one, on every this many waves.")]
+        public int lifeEveryWaves = 2;
 
-        [Header("Booster tubes (none in wave 1; wave 2: 1, waves 3-5: 2, then this many)")]
+        [Header("Booster tubes (none in wave 1; waves 2-4: 1, then this many)")]
         public int tubesFromWave = 2;
-        public int maxTubesPerWave = 3;
+        public int maxTubesPerWave = 2;
 
         [Header("Floating islands")]
         public int islandsFromWave = 4;
         public int startIslands = 3;
         public int capIslands = 8;
+        [Tooltip("Jamming towers first stand on the islands' second wave; after that their number creeps up every this many waves.")]
+        public int towerStepWaves = 3;
+        public int capTowers = 3;
 
         [Header("Zeppelin boss waves")]
         [Tooltip("Every this many waves is a boss wave: 5 makes waves 5, 10, 15 and so on.")]
@@ -123,6 +147,9 @@ namespace MiniPlanes
             bool turretWave = level.useBalloons && turretEveryWaves > 0 && wave % turretEveryWaves == 0;
             level.maxTurretBalloons = turretWave ? 1 : 0;
             level.turretBalloonInterval = turretWave ? waveDurationSeconds * 0.5f : 0f;
+            bool lifeWave = level.useBalloons && lifeEveryWaves > 0 && wave % lifeEveryWaves == 0;
+            level.maxLifeBalloons = lifeWave ? 1 : 0;
+            level.lifeBalloonInterval = lifeWave ? waveDurationSeconds * 0.8f : 0f;
 
             level.maxFighters = wave < fightersFromWave
                 ? 0
@@ -139,6 +166,7 @@ namespace MiniPlanes
             level.islandCount = wave < islandsFromWave
                 ? 0
                 : Mathf.Min(capIslands, startIslands + (wave - islandsFromWave) / 2);
+            level.jammingTowers = TowersForWave(wave);
 
             int boss = BossNumber(wave);
             level.SetBoss(boss, boss >= bossMissilesFrom);
@@ -154,16 +182,27 @@ namespace MiniPlanes
             // Tubes are spread evenly through the wave, so the cap is reached but never crowded.
             int tubes = TubesForWave(wave);
             level.maxBoosterTubes = tubes;
-            level.boosterTubeInterval = tubes > 0 ? level.pathDurationSeconds / (tubes + 0.5f) : 0f;
+            level.boosterTubeInterval = tubes > 0 ? level.pathDurationSeconds / (tubes + 1f) : 0f;
+            level.maxTubesAtOnce = 2;
         }
 
-        /// <summary>Booster tubes in a wave: none before tubesFromWave, 1 in wave 2, 2 in waves 3 to 5, then the cap.</summary>
+        /// <summary>Booster tubes in a wave: none before tubesFromWave, 1 up to wave 4, then the cap.</summary>
         public int TubesForWave(int wave)
         {
             if (wave < tubesFromWave) return 0;
-            if (wave <= 2) return Mathf.Min(1, maxTubesPerWave);
-            if (wave <= 5) return Mathf.Min(2, maxTubesPerWave);
+            if (wave <= 4) return Mathf.Min(1, maxTubesPerWave);
             return maxTubesPerWave;
+        }
+
+        /// <summary>
+        /// The most jamming towers in a wave: none the first time the islands appear, one the second time, then
+        /// slowly more, up to the cap. The islands randomise between this and one fewer.
+        /// </summary>
+        public int TowersForWave(int wave)
+        {
+            int appearance = wave - islandsFromWave;
+            if (appearance < 1) return 0;
+            return Mathf.Min(capTowers, 1 + (appearance - 1) / Mathf.Max(1, towerStepWaves));
         }
 
         /// <summary>0 for a normal wave, otherwise which boss wave this is: 1 for the first.</summary>

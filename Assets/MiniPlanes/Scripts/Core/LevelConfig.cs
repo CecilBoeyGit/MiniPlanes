@@ -17,13 +17,14 @@ namespace MiniPlanes
     [CreateAssetMenu(fileName = "Level", menuName = "MiniPlanes/Level Config")]
     public class LevelConfig : ScriptableObject
     {
-        public const int CurrentDefaultsVersion = 9;
+        public const int CurrentDefaultsVersion = 15;
         [HideInInspector] public int defaultsVersion;
 
         [Header("Identity")]
         public string levelName = "Level";
         public int levelNumber = 1;
-        [TextArea] public string introCaption = "";
+        [TextArea, Tooltip("Shown on the level's Start page. {fighter}, {bomber}, {zeppelin}, {missile}, {shield}, {turret}, {life}, {bomb} and {tube} draw as icons.")]
+        public string introCaption = "";
 
         [Header("Passing the level")]
         [Tooltip("Ring passes needed by the time the plane finishes its path. 0 means simply surviving passes.")]
@@ -63,7 +64,11 @@ namespace MiniPlanes
         [Tooltip("Consecutive ring passes that bring the line back. 0 turns this off.")]
         public int streakToReveal = 3;
         [Tooltip("Seconds the line stays visible after a streak.")]
-        public float streakRevealSeconds = 2.5f;
+        public float streakRevealSeconds = 6f;
+        [Tooltip("After a streak, the line grows from the plane to the end of the path over this many seconds.")]
+        public float streakGrowSeconds = 2f;
+        [Tooltip("The streak reveal fades out completely over its last this many seconds.")]
+        public float streakFadeSeconds = 1.5f;
         [Tooltip("A streak resets if no ring pass happens for this many seconds.")]
         public float streakResetSeconds = 12f;
         [Range(0f, 1f), Tooltip("How visible the line is. Lower is fainter.")]
@@ -110,6 +115,10 @@ namespace MiniPlanes
         public int maxShieldBalloons = -1;
         [Tooltip("Most gold balloons in one flight. -1 means no limit.")]
         public int maxTurretBalloons = -1;
+        [Tooltip("Average seconds between small heart balloons, which give a life back. 0 turns them off.")]
+        public float lifeBalloonInterval = 0f;
+        [Tooltip("Most heart balloons in one flight. -1 means no limit.")]
+        public int maxLifeBalloons = -1;
 
         [Header("Turret (from the gold balloon, or the Bluebird's own)")]
         [Tooltip("How long a fitted turret lasts, in seconds.")]
@@ -129,17 +138,25 @@ namespace MiniPlanes
         public float boosterTubeInterval = 0f;
         [Tooltip("Most booster tubes in one flight. -1 means no limit.")]
         public int maxBoosterTubes = -1;
+        [Tooltip("Most booster tubes floating at once.")]
+        public int maxTubesAtOnce = 2;
         [Tooltip("Seconds a booster tube lasts. Holding it keeps it.")]
         public float boosterTubeLifetime = 24f;
-        [Tooltip("Speed multiplier after flying cleanly through a tube.")]
+        [Tooltip("Speed multiplier after flying cleanly through a straight tube.")]
         public float boostSpeedMultiplier = 1.7f;
+        [Tooltip("A curved tube is harder to line up, so its boost is this many times a straight one's.")]
+        public float curvedBoostFactor = 1.5f;
+        [Range(0f, 1f), Tooltip("Share of booster tubes that are straight; the rest are curved.")]
+        public float straightTubeChance = 0.7f;
         public float boostSeconds = 3f;
 
         [Header("Floating islands")]
         [Tooltip("Islands floating around the path. 0 turns them off.")]
         public int islandCount = 0;
-        public float islandMinSize = 0.06f;
-        public float islandMaxSize = 0.12f;
+        [Tooltip("Jamming towers stood on the islands: one fewer or this many, chosen at random each wave. 0 for none.")]
+        public int jammingTowers = 0;
+        public float islandMinSize = 0.12f;
+        public float islandMaxSize = 0.24f;
         [Tooltip("Gap kept between an island and the flight path, in metres.")]
         public float islandPathClearance = 0.06f;
 
@@ -191,9 +208,11 @@ namespace MiniPlanes
         [Tooltip("The plane within this distance of a balloon blast takes damage, in metres.")]
         public float bombBlastRadius = 0.3f;
         [Tooltip("Both palms must be within this distance, on opposite sides of the balloon, to contain it.")]
-        public float bombCoverDistance = 0.13f;
+        public float bombCoverDistance = 0.18f;
+        [Tooltip("How opposite the palms must be: the dot product of their directions from the balloon must be below this. -1 is exactly opposite, 0 is at right angles.")]
+        public float bombCoverOpposition = 0.1f;
         [Tooltip("How long both hands must hold the cover, in seconds.")]
-        public float bombCoverHoldSeconds = 0.2f;
+        public float bombCoverHoldSeconds = 0.12f;
         [Tooltip("An unarmed balloon disappears after this many seconds.")]
         public float bombLifetime = 18f;
 
@@ -270,7 +289,7 @@ namespace MiniPlanes
                     break;
                 case 4:
                     levelName = "Bandits";
-                    introCaption = "Enemy fighters shoot at your plane.\nBlock bullets with your hands. Flick fighters to destroy them.";
+                    introCaption = "{fighter} shoot at your plane.\nBlock their bullets with your hands. Flick {fighter} to destroy them.";
                     requiredRingPasses = 3;
                     hitsToCrash = 1;
                     planeSpeed = 0.28f;
@@ -284,7 +303,7 @@ namespace MiniPlanes
                     break;
                 case 5:
                     levelName = "Fair Winds";
-                    introCaption = "Pinch a powerup and drag it onto the flight path.\nBlue shields one hit, gold fits a turret. Line a tube up with the path for a speed boost.";
+                    introCaption = "Pinch a powerup and drag it onto the flight path. {shield} shields one hit,\n{turret} fits a turret, {life} gives back a life. Line {tube} up with the path to boost.";
                     requiredRingPasses = 3;
                     hitsToCrash = 1;
                     planeSpeed = 0.3f;
@@ -298,11 +317,13 @@ namespace MiniPlanes
                     fighterSpawnInterval = 11f;
                     useBalloons = true;
                     turretBalloonInterval = 18f;
-                    boosterTubeInterval = 12f;
+                    lifeBalloonInterval = 16f;
+                    maxLifeBalloons = 1;
+                    boosterTubeInterval = 20f;
                     break;
                 case 7:
                     levelName = "Zeppelin";
-                    introCaption = "A giant zeppelin attacks from afar. It can't be destroyed.\nBlock its bullets, flick its fighters, and hold a missile in your palm until it drops.";
+                    introCaption = "{zeppelin} attacks from afar and can't be destroyed.\nBlock its bullets, flick its {fighter}, hold {missile} in your palm until it drops.";
                     requiredRingPasses = 2;
                     hitsToCrash = 2;
                     planeSpeed = 0.26f;
@@ -317,7 +338,7 @@ namespace MiniPlanes
                     break;
                 default:
                     levelName = "Bomb Run";
-                    introCaption = "Bombers drop red balloons near your path, then fly off.\nFlick a bomber for extra points. Cup a flashing balloon with both hands.";
+                    introCaption = "{bomber} drop {bomb} near your path, then fly off.\nFlick {bomber} for extra points. Cup a flashing {bomb} with both hands.";
                     requiredRingPasses = 4;
                     hitsToCrash = 1;
                     planeSpeed = 0.32f;
@@ -327,8 +348,8 @@ namespace MiniPlanes
                     turnRadius = 0.125f;
                     revealMode = PathRevealMode.TimedAtStart;
                     useFuel = true;
-                    maxFighters = 1;
-                    fighterSpawnInterval = 13f;
+                    // Bombers only: no fighters in the bomber lesson.
+                    maxFighters = 0;
                     useBalloons = true;
                     turretBalloonInterval = 16f;
                     maxBombers = 1;

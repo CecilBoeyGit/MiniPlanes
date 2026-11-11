@@ -2,7 +2,7 @@ using UnityEngine;
 
 namespace MiniPlanes
 {
-    public enum ComicKind { RingPass, Crash, Flick, Blast, Poof, Spark, ShieldPop, Plus1, Plus2 }
+    public enum ComicKind { RingPass, Crash, Flick, Blast, Poof, Spark, ShieldPop, Plus1, Plus2, Smoke, Dust }
 
     /// <summary>
     /// Pooled hand-drawn comic effects from the art bible: each plays its onset, peak and breakup frames
@@ -67,6 +67,56 @@ namespace MiniPlanes
             }
         }
 
+        static Texture2D[] _smoke;
+
+        /// <summary>Three hand-drawn-looking smoke puffs, made once: a small puff, a full cloud, and the cloud breaking up.</summary>
+        static Texture2D[] SmokeFrames()
+        {
+            if (_smoke != null) return _smoke;
+            _smoke = new[] { Puff(5, 0.55f, 1f, 11), Puff(7, 0.85f, 1f, 23), Puff(6, 0.95f, 0.55f, 37) };
+            return _smoke;
+        }
+
+        static Texture2D Puff(int lobes, float spread, float density, int seed)
+        {
+            const int size = 128;
+            var rng = new System.Random(seed);
+            var centres = new Vector2[lobes];
+            var radii = new float[lobes];
+            for (int i = 0; i < lobes; i++)
+            {
+                float a = i / (float)lobes * Mathf.PI * 2f + (float)rng.NextDouble() * 0.6f;
+                float d = spread * Mathf.Lerp(0.25f, 0.45f, (float)rng.NextDouble());
+                centres[i] = new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * d;
+                radii[i] = Mathf.Lerp(0.22f, 0.32f, (float)rng.NextDouble()) * Mathf.Lerp(0.8f, 1f, spread);
+                if (density < 1f && rng.NextDouble() > density) radii[i] *= 0.45f;
+            }
+            var px = new Color32[size * size];
+            float pixel = 2f / size;
+            var ink = new Color(0.45f, 0.45f, 0.48f, 1f);
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    var p = new Vector2((x + 0.5f) * pixel - 1f, (y + 0.5f) * pixel - 1f);
+                    float d = 9f;
+                    for (int i = 0; i < lobes; i++) d = Mathf.Min(d, (p - centres[i]).magnitude - radii[i]);
+                    if (density >= 1f) d = Mathf.Min(d, p.magnitude - spread * 0.32f);
+                    float fill = Mathf.Clamp01(0.5f - d / pixel);
+                    float rim = Mathf.Clamp01(0.5f - (d - 0.035f) / pixel) - fill;
+                    // Lighter on top, a touch greyer underneath, like a soft comic cloud.
+                    float shade = Mathf.Lerp(0.82f, 1f, Mathf.Clamp01(p.y * 0.8f + 0.6f));
+                    Color c = new Color(shade, shade, shade, 1f) * fill + ink * Mathf.Max(0f, rim);
+                    c.a = Mathf.Clamp01(fill + Mathf.Max(0f, rim));
+                    px[y * size + x] = c;
+                }
+            }
+            var tex = new Texture2D(size, size, TextureFormat.RGBA32, true) { name = "SmokePuff", wrapMode = TextureWrapMode.Clamp };
+            tex.SetPixels32(px);
+            tex.Apply(true, true);
+            return tex;
+        }
+
         public static void Play(ComicKind kind, Vector3 position, float size = 0f)
         {
             if (Instance != null) Instance.PlayInternal(kind, position, size);
@@ -101,6 +151,16 @@ namespace MiniPlanes
                     frames = new[] { _art.crashOnset, _art.crashBreakup };
                     tint = new Color(0.8f, 0.8f, 0.82f);
                     defaultSize = 0.09f;
+                    break;
+                case ComicKind.Smoke:
+                    frames = SmokeFrames();
+                    tint = new Color(0.96f, 0.96f, 0.96f);
+                    defaultSize = 0.12f;
+                    break;
+                case ComicKind.Dust:
+                    frames = SmokeFrames();
+                    tint = new Color(0.72f, 0.72f, 0.74f);
+                    defaultSize = 0.06f;
                     break;
                 case ComicKind.ShieldPop:
                     frames = new[] { _art.ringOnset, _art.ringPeak, _art.ringBreakup };

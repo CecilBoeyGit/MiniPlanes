@@ -20,6 +20,7 @@ namespace MiniPlanes
         public Material turretMatte;
         [Tooltip("The zeppelin's own textured material.")]
         public Material zeppelinMatte;
+        public Material jammingTowerMatte;
         public Material handRock;
         public Material silhouette;
         public Material bubbleRing;
@@ -35,6 +36,10 @@ namespace MiniPlanes
         public Material boostTrail;
         [Tooltip("The see-through wall of a booster tube.")]
         public Material tubeGlass;
+        [Tooltip("Refracting glass for the menu, pause and wrist panels and their buttons. Empty keeps them solid.")]
+        public Material uiGlass;
+        [Tooltip("The rounded panel shape the glass uses, with the edge distance in red.")]
+        public Sprite uiGlassSprite;
 
         [Header("Models")]
         public GameObject playerPlane;
@@ -48,18 +53,32 @@ namespace MiniPlanes
         public GameObject turret;
         [Tooltip("The boss airship. Empty builds a simple stand-in from shapes.")]
         public GameObject zeppelin;
+        [Tooltip("The jamming tower on the floating islands. Empty builds a simple stand-in from shapes.")]
+        public GameObject jammingTower;
 
         [Header("World UI prefabs (edit these to restyle)")]
         [Tooltip("Floats above the blue shield balloon.")]
         public GameObject shieldIcon;
-        [Tooltip("Floats above the red bomb balloon.")]
+        [Tooltip("Floats above the red bomb balloon. Used only if the no-touch icon is missing.")]
         public GameObject bombIcon;
+        [Tooltip("Above a bomb balloon before it flashes: don't touch it.")]
+        public GameObject noTouchIcon;
+        [Tooltip("Above a flashing bomb balloon: cup it with both hands. Animated.")]
+        public GameObject cupIcon;
         [Tooltip("Floats above the gold turret balloon.")]
         public GameObject turretIcon;
+        [Tooltip("Floats above the small heart balloon.")]
+        public GameObject lifeIcon;
+        [Tooltip("Floats above a jamming tower: a blocked signal.")]
+        public GameObject jamIcon;
+        [Tooltip("The drag handle on a booster tube.")]
+        public GameObject dragCursor;
         [Tooltip("The pinch-and-drag target under each powerup balloon.")]
         public GameObject crosshair;
         [Tooltip("The fuel bar above the plane.")]
         public GameObject fuelGauge;
+        [Tooltip("Pictures a tutorial's intro text can show: write {key} in the text, such as {fighter}.")]
+        public InlineIcons.Entry[] captionIcons = new InlineIcons.Entry[0];
 
         [Header("Comic VFX")]
         public Texture2D ringOnset;
@@ -83,6 +102,7 @@ namespace MiniPlanes
         public Material BomberMaterial => bomberMatte != null ? bomberMatte : planeMatte;
         public Material TurretMaterial => turretMatte != null ? turretMatte : planeMatte;
         public Material ZeppelinMaterial => zeppelinMatte != null ? zeppelinMatte : planeMatte;
+        public Material JammingTowerMaterial => jammingTowerMatte != null ? jammingTowerMatte : planeMatte;
     }
 
     /// <summary>Attaches a normalised model under a parent. Shared by the plane, enemies and balloons.</summary>
