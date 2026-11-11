@@ -290,6 +290,28 @@ namespace MiniPlanes
             Shoot("plane_with_turret");
             _gm.Plane.Hide();
 
+            // The Supersonic jet with its twin turrets on the domes.
+            if (_gm.catalog != null && _gm.catalog.Count >= 4)
+            {
+                string flying = Progression.SelectedPlane;
+                Progression.GrantPlane(_gm.catalog.Get(3).id);
+                Progression.SelectedPlane = _gm.catalog.Get(3).id;
+                _gm.ApplyPlaneSelection();
+                _gm.Plane.PrepareAtStart(planePath, cfg, false);
+                yield return null;
+                _gm.Plane.transform.position = InFront(0.2f);
+                _gm.Plane.transform.rotation = Quaternion.LookRotation(Vector3.right + Vector3.forward * 0.6f, Vector3.up);
+                _gm.Plane.EquipTurret(cfg);
+                yield return null;
+                Shoot("jet_twin_turrets");
+                _gm.Plane.transform.rotation = Quaternion.LookRotation(-Vector3.forward, Vector3.up) * Quaternion.Euler(35f, 0f, 0f);
+                yield return null;
+                Shoot("jet_twin_turrets_front");
+                _gm.Plane.Hide();
+                Progression.SelectedPlane = flying;
+                _gm.ApplyPlaneSelection();
+            }
+
             // Comic effects at their real sizes.
             ComicVfx.Play(ComicKind.RingPass, InFront(0.42f, -0.2f));
             ComicVfx.Play(ComicKind.Plus2, InFront(0.42f, -0.2f, 0.06f));
@@ -333,7 +355,7 @@ namespace MiniPlanes
             _gm.menu.Press("plane0");
             yield return WaitSeconds(0.3f);
             Shoot("hangar_owned_plane");
-            for (int i = 1; i < 3; i++)
+            for (int i = 1; i < 4; i++)
             {
                 if (_gm.catalog == null || _gm.catalog.Count <= i) break;
                 Progression.GrantPlane(_gm.catalog.Get(i).id);
@@ -1094,7 +1116,17 @@ namespace MiniPlanes
         {
             Note("Hangar: planes, prices and paint");
             var catalog = _gm.catalog;
-            Check("the Hangar has three planes", catalog != null && catalog.Count == 3, catalog != null ? catalog.Count.ToString() : "none");
+            Check("the Hangar has four planes", catalog != null && catalog.Count == 4, catalog != null ? catalog.Count.ToString() : "none");
+            if (catalog != null && catalog.Count == 4)
+            {
+                var jet = catalog.Get(3);
+                bool priciest = true;
+                for (int i = 0; i < 3; i++) priciest &= catalog.Get(i).price < jet.price;
+                Check("the fourth plane is the Supersonic jet, the most expensive", jet.id == "jet" && priciest && !catalog.IsOwned(3), jet.price + " coins");
+                Check("the jet has twin wave turrets and a wave boost",
+                    jet.Has(PlanePerk.WaveTurret) && jet.Has(PlanePerk.TwinTurrets) && jet.Has(PlanePerk.WaveBoost) && jet.description.Contains("Twin"));
+                Check("all four planes have a row in the Hangar", _gm.menu.planeRows.Length >= 4);
+            }
             if (catalog == null || catalog.Count < 3) yield break;
             Check("only the first plane is owned at the start", catalog.IsOwned(0) && !catalog.IsOwned(1) && !catalog.IsOwned(2));
             Check("plane 2 costs 500 and plane 3 costs 1000", catalog.Get(1).price == 500 && catalog.Get(2).price == 1000);
@@ -1692,6 +1724,7 @@ namespace MiniPlanes
             var catalog = _gm.catalog;
             if (catalog == null || catalog.Count < 3) yield break;
             Check("the Bluebird has the wave turret perk", catalog.Get(1).perk == PlanePerk.WaveTurret);
+            Check("the Bluebird's turret is a single one", !catalog.Get(1).Has(PlanePerk.TwinTurrets));
             Check("the Pusher Racer has the wave boost perk", catalog.Get(2).perk == PlanePerk.WaveBoost);
             Check("their descriptions say so", catalog.Get(1).description.Contains("turret") && catalog.Get(2).description.Contains("Boosts"));
 
@@ -1720,6 +1753,55 @@ namespace MiniPlanes
             yield return WaitSeconds(catalog.Get(2).perkBoostSeconds);
             Check("its boost ends after 3 seconds", !plane.IsBoosting && Mathf.Abs(plane.Speed - plane.BaseSpeed) < 1e-3f, plane.Speed.ToString("F3"));
             yield return AbortToMenu();
+
+            if (catalog.Count >= 4)
+            {
+                var jet = catalog.Get(3);
+                Progression.GrantPlane(jet.id);
+                Progression.SelectedPlane = jet.id;
+                _gm.ApplyPlaneSelection();
+                yield return StartAndWaitForFlight(3);
+                plane = _gm.Plane;
+                plane.AddFuel(100f);
+                plane.DebugInvulnerable = true;
+                yield return WaitSeconds(0.6f);
+                Check("the jet boosts at the start of the wave", plane.IsBoosting && plane.Speed > plane.BaseSpeed * 1.4f,
+                    plane.Speed.ToString("F3") + " vs " + plane.BaseSpeed.ToString("F3"));
+                Check("no jet turrets before an enemy shows up", !plane.HasTurret);
+                yield return WaitFor(() => EnemyPlane.Active.Count > 0, 10f);
+                yield return null;
+                Check("the jet fits twin turrets when the first fighter shows up", plane.TurretCount == 2 && plane.TwinTurret != null);
+                if (plane.TurretCount == 2)
+                {
+                    Vector3 a = plane.transform.InverseTransformPoint(plane.Turret.transform.position);
+                    Vector3 b = plane.transform.InverseTransformPoint(plane.TwinTurret.transform.position);
+                    Check("the twins sit one each side", Mathf.Abs(a.x + b.x) < 1e-3f && Mathf.Abs(a.x) > 1e-3f && Mathf.Abs(a.y - b.y) < 1e-3f,
+                        a.x.ToString("F3") + " / " + b.x.ToString("F3"));
+                    Check("both have the usual 6 seconds", plane.Turret.TimeLeft > 5.5f && plane.TwinTurret.TimeLeft > 5.5f);
+                    // Two enemies in range: the twins split them.
+                    var f1 = _gm.spawner.SpawnFighterAt(plane.Position + plane.transform.right * 0.15f + Vector3.up * 0.05f);
+                    var f2 = _gm.spawner.SpawnFighterAt(plane.Position - plane.transform.right * 0.15f + Vector3.up * 0.05f);
+                    foreach (var e in EnemyPlane.Active) if (e != null && e != f1 && e != f2) e.transform.position += Vector3.up * 5f;
+                    bool split = false;
+                    int shots = 0;
+                    for (int i = 0; i < 6 && !split; i++)
+                    {
+                        yield return null;
+                        var ta = plane.Turret != null ? plane.Turret.CurrentTarget : null;
+                        var tb = plane.TwinTurret != null ? plane.TwinTurret.CurrentTarget : null;
+                        split = ta != null && tb != null && ta != tb;
+                    }
+                    Check("with two enemies near, each twin takes its own", split);
+                    yield return WaitSeconds(0.5f);
+                    shots = (plane.Turret != null ? plane.Turret.ShotsFired : 0) + (plane.TwinTurret != null ? plane.TwinTurret.ShotsFired : 0);
+                    Check("both twins fire", plane.Turret != null && plane.TwinTurret != null && plane.Turret.ShotsFired > 0 && plane.TwinTurret.ShotsFired > 0, shots + " shots");
+                    float left = plane.Turret != null ? plane.Turret.TimeLeft : 0f;
+                    yield return WaitSeconds(left + 0.3f);
+                    Check("the twins come off together when their time is up", plane.TurretCount == 0);
+                }
+                plane.DebugInvulnerable = false;
+                yield return AbortToMenu();
+            }
 
             Progression.SelectedPlane = catalog.Get(0).id;
             _gm.ApplyPlaneSelection();
