@@ -108,6 +108,7 @@ namespace MiniPlanes
             yield return TryStep(InfinitePowerups());
             yield return TryStep(InfiniteMode());
             yield return TryStep(ZeppelinBoss());
+            yield return TryStep(Sounds());
             Finish();
         }
 
@@ -396,6 +397,7 @@ namespace MiniPlanes
         {
             _gm = FindAnyObjectByType<GameManager>();
             var headGo = new GameObject("FakeHead");
+            headGo.AddComponent<AudioListener>();
             _head = headGo.transform;
             _head.position = new Vector3(0f, 1.2f, 0f);
             _head.rotation = Quaternion.identity;
@@ -430,6 +432,7 @@ namespace MiniPlanes
             _gm.head = _head;
             _gm.Plane.SetHead(_head);
             ComicVfx.Instance.SetHead(_head);
+            if (Sfx.Instance != null) Sfx.Instance.SetHead(_head);
             Billboard.Head = _head;
             _gm.hud.SetHead(_head);
             _gm.menu.SetHead(_head);
@@ -1646,10 +1649,7 @@ namespace MiniPlanes
             Check("a tube is used up by a clean pass", tube == null);
             Check("a broken tube gives no boost", !plane.IsBoosting);
             Check("a tube's wall doesn't hurt the plane", plane.HitsTaken == hitsBefore, plane.HitsTaken + " hits");
-            // A hand knocking into a tube breaks it; a gentle touch doesn't.
-            int knocks = 0;
-            Action<BoosterTube> onKnock = t => knocks++;
-            BoosterTube.AnyKnocked += onKnock;
+            // Hands never break a tube: a gentle touch or a hard knock leaves it.
             var touched = _gm.spawner.SpawnTube(TubeShape.StraightShort);
             ClearTubesExcept(touched);
             yield return WaitSeconds(0.2f);
@@ -1660,7 +1660,7 @@ namespace MiniPlanes
                 _left.PosePalm(side + Vector3.up * 0.002f);
                 yield return null;
             }
-            Check("a gentle touch leaves a tube alone", touched != null && knocks == 0);
+            Check("a gentle touch leaves a tube alone", touched != null);
             ParkHands();
             yield return null;
             HandMotion.Reset(_left);
@@ -1672,9 +1672,15 @@ namespace MiniPlanes
                 yield return null;
             }
             yield return null;
-            Check("a hand knocking into a tube breaks it", knocks >= 1 && touched == null, "knocks " + knocks);
+            Check("a hand knocking into a tube leaves it too", touched != null && touched.IsAlive);
+            if (touched != null)
+            {
+                float lifeBefore = touched.TimeLeft;
+                yield return WaitSeconds(0.5f);
+                Check("a tube counts down to vanishing by itself", touched != null && touched.TimeLeft < lifeBefore - 0.4f && touched.TimeLeft <= cfg.boosterTubeLifetime,
+                    touched != null ? touched.TimeLeft.ToString("F1") + " s left" : "gone");
+            }
             ParkHands();
-            BoosterTube.AnyKnocked -= onKnock;
             BoosterTube.AnyBoosted -= onBoost;
             BoosterTube.AnyWallHit -= onWall;
             yield return AbortToMenu();
@@ -1853,7 +1859,12 @@ namespace MiniPlanes
             Check("a hand blocks the zeppelin's bullets", round == null);
             ParkHands();
 
+            float azimuthBefore = z.Azimuth;
+            int movesBefore = z.Moves;
             yield return WaitFor(() => z.FighterBatches > 0, 25f);
+            Check("the zeppelin moves round the path before its next attack", z.Moves > movesBefore && Mathf.Abs(z.Azimuth - azimuthBefore) >= z.minMoveDeg - 0.5f,
+                azimuthBefore.ToString("F0") + " to " + z.Azimuth.ToString("F0") + " degrees");
+            Check("it stays in front of the player", Mathf.Abs(z.Azimuth) <= z.maxAzimuthDeg + 0.01f);
             yield return WaitSeconds(cfg.bossFighterBatch * 0.5f + 0.3f);
             Check("it launches a batch of fighters from its decks", z.FighterBatches > 0 && EnemyPlane.Active.Count >= cfg.bossFighterBatch,
                 EnemyPlane.Active.Count + " fighters");
@@ -1958,6 +1969,7 @@ namespace MiniPlanes
             bool tubesOk = true, earlyOk = true, shieldsOk = true;
             for (int wave = 1; wave <= 20; wave++)
             {
+                if (wave == 1) continue;
                 inf.Apply(w, wave);
                 if (w.maxTurretBalloons > 0) turretWaves++;
                 if (w.useBalloons && w.maxShieldBalloons != 0) shieldWaves++;
@@ -1968,7 +1980,19 @@ namespace MiniPlanes
             Check("balloons are capped per wave", shieldsOk);
             Check("the turret balloon is rarer than the shield", turretWaves > 0 && turretWaves * 2 <= shieldWaves, turretWaves + " turret waves, " + shieldWaves + " shield waves");
             Check("at most 3 tubes a wave", tubesOk);
-            Check("1 or 2 tubes in the first 5 waves", earlyOk);
+            Check("1 or 2 tubes in waves 2 to 5", earlyOk);
+            inf.Apply(w, 1);
+            Check("no tubes in wave 1", w.maxBoosterTubes == 0 && w.boosterTubeInterval == 0f);
+            inf.Apply(w, 1);
+            float r1 = w.randomness, turn1 = w.turnRadius, speed1 = w.planeSpeed;
+            Check("wave 1 flies a simple path", r1 <= 0.12f && turn1 >= 0.14f && !w.allowLoops,
+                "randomness " + r1.ToString("F2") + ", turn " + turn1.ToString("F3"));
+            inf.Apply(w, 5);
+            float r5 = w.randomness;
+            float oldR3 = Mathf.Lerp(inf.startRandomness, inf.capRandomness, inf.Ramp(3));
+            Check("wave 5's path is as twisty as wave 3's used to be", Mathf.Abs(inf.PathRamp(5) - inf.Ramp(3)) < 1e-4f,
+                "path ramp " + inf.PathRamp(5).ToString("F3") + " vs " + inf.Ramp(3).ToString("F3"));
+            Check("the path gets harder wave by wave", r5 > r1 && w.planeSpeed > speed1);
 
             // The spawner keeps to the caps however quickly its timers run.
             inf.Apply(w, 6);
@@ -1989,6 +2013,45 @@ namespace MiniPlanes
             _gm.spawner.End();
             Destroy(w);
             yield return null;
+        }
+
+        IEnumerator Sounds()
+        {
+            Note("Sound effects: every sound has a clip, and game events play them");
+            var gs = _gm.sounds;
+            Check("the game has a sound list", gs != null);
+            if (gs == null) yield break;
+            bool all = true;
+            string missing = "";
+            foreach (SoundKind k in Enum.GetValues(typeof(SoundKind)))
+            {
+                var e = gs.Get(k);
+                if (e == null || e.clip == null)
+                {
+                    all = false;
+                    missing += k + " ";
+                }
+            }
+            Check("every sound has a clip", all, missing);
+            Check("the sound player is running", Sfx.Instance != null);
+            Sfx.Counts.Clear();
+            yield return StartAndWaitForFlight(0);
+            yield return WaitSeconds(0.5f);
+            var engine = _gm.Plane.GetComponentInChildren<AudioSource>();
+            Check("the plane's engine hums while it flies", engine != null && engine.isPlaying && engine.loop);
+            yield return FlyThroughRings(1, 10f);
+            Check("a ring pass plays its chime", Sfx.Counts.ContainsKey(SoundKind.RingPass));
+            _gm.Pause();
+            yield return Frames(3);
+            Check("pausing plays a sound and pauses the world's sounds", Sfx.Counts.ContainsKey(SoundKind.Pause) && AudioListener.pause);
+            _gm.Resume();
+            yield return Frames(3);
+            Check("resuming plays a sound and lets the world's sounds go on", Sfx.Counts.ContainsKey(SoundKind.Unpause) && !AudioListener.pause);
+            _gm.Plane.Crash("test crash");
+            yield return null;
+            Check("a crash plays its sound", Sfx.Counts.ContainsKey(SoundKind.PlaneCrash));
+            yield return AbortToMenu();
+            Check("the engine stops when the plane is put away", engine == null || !engine.isPlaying);
         }
     }
 }
