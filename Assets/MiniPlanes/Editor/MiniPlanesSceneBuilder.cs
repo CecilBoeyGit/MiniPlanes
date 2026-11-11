@@ -44,6 +44,7 @@ namespace MiniPlanes.Editor
             var art = CreateGameArt();
             var levels = CreateLevels();
             var catalog = CreateCatalog(art);
+            var sounds = CreateSounds();
             var infinite = CreateInfinite(levels);
 
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
@@ -111,6 +112,7 @@ namespace MiniPlanes.Editor
             wrist.rings = new[] { left.ring, right.ring };
 
             gm.catalog = catalog;
+            gm.sounds = sounds;
             gm.pausePanel = pause;
             gm.wristMenu = wrist;
             gm.head = head;
@@ -144,6 +146,76 @@ namespace MiniPlanes.Editor
         {
             foreach (var part in c.GetComponentsInChildren<Component>(true))
                 if (part != null) PrefabUtility.RecordPrefabInstancePropertyModifications(part);
+        }
+
+        const string SoundsPath = "Assets/MiniPlanes/Audio/GameSounds.asset";
+
+        /// <summary>
+        /// The sound list, with a clip and a starting volume for each sound. Only missing entries and empty
+        /// clips are filled in, so volumes and clips you change are kept.
+        /// </summary>
+        static GameSounds CreateSounds()
+        {
+            EnsureFolder("Assets/MiniPlanes/Audio");
+            var gs = AssetDatabase.LoadAssetAtPath<GameSounds>(SoundsPath);
+            if (gs == null)
+            {
+                gs = ScriptableObject.CreateInstance<GameSounds>();
+                AssetDatabase.CreateAsset(gs, SoundsPath);
+            }
+            // kind, file, volume, spatial, shortest gap between repeats
+            var defaults = new (SoundKind kind, string file, float volume, bool spatial, float gap)[]
+            {
+                (SoundKind.RingPass, "ring_pass", 0.7f, true, 0.05f),
+                (SoundKind.RingBigO, "ring_big_o", 0.75f, true, 0.05f),
+                (SoundKind.RingClip, "ring_clip", 0.6f, true, 0.2f),
+                (SoundKind.PlaneHit, "plane_hit", 0.8f, true, 0.1f),
+                (SoundKind.PlaneCrash, "plane_crash", 0.8f, true, 0.2f),
+                (SoundKind.EngineLoop, "engine_loop", 0.16f, true, 0f),
+                (SoundKind.Boost, "boost", 0.6f, true, 0.3f),
+                (SoundKind.Flick, "flick", 0.7f, true, 0.05f),
+                (SoundKind.GunBurst, "gun_burst", 0.45f, true, 0.1f),
+                (SoundKind.BulletBlock, "bullet_block", 0.5f, true, 0.06f),
+                (SoundKind.TurretOn, "turret_on", 0.6f, true, 0.3f),
+                (SoundKind.TurretShot, "turret_shot", 0.15f, true, 0.08f),
+                (SoundKind.ShieldOn, "shield_on", 0.6f, true, 0.3f),
+                (SoundKind.ShieldBreak, "shield_break", 0.7f, true, 0.1f),
+                (SoundKind.BalloonPop, "balloon_pop", 0.4f, true, 0.1f),
+                (SoundKind.BombArmed, "bomb_armed", 0.6f, true, 0.2f),
+                (SoundKind.Explosion, "explosion", 0.85f, true, 0.1f),
+                (SoundKind.SmallBlast, "small_blast", 0.7f, true, 0.1f),
+                (SoundKind.Defused, "defused", 0.7f, true, 0.1f),
+                (SoundKind.TubeBreak, "tube_break", 0.6f, true, 0.1f),
+                (SoundKind.IslandShatter, "island_shatter", 0.6f, true, 0.1f),
+                (SoundKind.Dust, "dust", 0.6f, true, 0.05f),
+                (SoundKind.BossAlarm, "boss_alarm", 0.55f, false, 1f),
+                (SoundKind.MissileLock, "missile_lock", 0.7f, false, 1f),
+                (SoundKind.MissileLaunch, "missile_launch", 0.7f, true, 0.3f),
+                (SoundKind.UiClick, "ui_click", 0.5f, false, 0.05f),
+                (SoundKind.Pause, "pause", 0.6f, false, 0.1f),
+                (SoundKind.Unpause, "unpause", 0.6f, false, 0.1f),
+                (SoundKind.Title, "title", 0.55f, false, 1f),
+                (SoundKind.LevelComplete, "level_complete", 0.7f, false, 0.5f),
+                (SoundKind.NewWave, "new_wave", 0.6f, false, 0.5f),
+                (SoundKind.LevelFailed, "level_failed", 0.7f, false, 0.5f),
+                (SoundKind.Purchase, "purchase", 0.7f, false, 0.3f),
+                (SoundKind.Reward, "reward", 0.6f, false, 0.5f),
+            };
+            var list = new List<SoundEntry>(gs.sounds ?? new SoundEntry[0]);
+            foreach (var d in defaults)
+            {
+                var entry = list.Find(e => e != null && e.kind == d.kind);
+                if (entry == null)
+                {
+                    entry = new SoundEntry { kind = d.kind, volume = d.volume, spatial = d.spatial, minInterval = d.gap,
+                        pitchJitter = d.spatial ? 0.06f : 0f };
+                    list.Add(entry);
+                }
+                if (entry.clip == null) entry.clip = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/MiniPlanes/Audio/" + d.file + ".ogg");
+            }
+            gs.sounds = list.ToArray();
+            EditorUtility.SetDirty(gs);
+            return gs;
         }
 
         const string CatalogPath = "Assets/MiniPlanes/Levels/Planes.asset";
