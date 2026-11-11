@@ -31,6 +31,7 @@ namespace MiniPlanes.Editor
             if (!AssetDatabase.IsValidFolder(Dir)) AssetDatabase.CreateFolder("Assets/MiniPlanes/Art", "UI");
             Write("White", 8, p => -1f, Color.white, 0f, 0);
             Write("Rounded", 96, p => RoundedBox(p, Vector2.zero, new Vector2(1f, 1f), 0.5f), Color.white, 0f, 24);
+            WriteGlass("RoundedGlass", 96, 24);
             Write("Circle", 64, p => Circle(p, Vector2.zero, 0.97f), Color.white, 0f, 0);
             Write("Ring", 64, p => Mathf.Abs(Circle(p, Vector2.zero, 0.84f)) - 0.12f, Color.white, 0f, 0);
             Icon("Heart", 128, new[]
@@ -74,6 +75,106 @@ namespace MiniPlanes.Editor
                 L(p => RoundedBox(p, new Vector2(-0.2f, 0.12f), new Vector2(0.1f, 0.035f), 0.03f), new Color(0.98f, 0.74f, 0.14f), 0f),
                 L(p => RoundedBox(p, new Vector2(-0.04f, 0.16f), new Vector2(0.1f, 0.035f), 0.03f), new Color(0.98f, 0.74f, 0.14f), 0f)
             }));
+            Icon("LifeIcon", 256, Badge(new Color(1f, 0.8f, 0.84f), new[]
+            {
+                L(p => Mathf.Min(Mathf.Min(Circle(p, new Vector2(-0.24f, 0.16f), 0.29f), Circle(p, new Vector2(0.24f, 0.16f), 0.29f)),
+                    RotatedBox(p, new Vector2(0f, -0.12f), 0.37f, 45f)), new Color(0.94f, 0.33f, 0.4f), 0.05f),
+                L(p => Circle(p, new Vector2(-0.26f, 0.24f), 0.08f), new Color(1f, 0.75f, 0.78f), 0f)
+            }));
+            // The drag handle on a booster tube: a ring with arrows pointing four ways.
+            Write("DragCursor", 128, p =>
+            {
+                float ring = Mathf.Abs(Circle(p, Vector2.zero, 0.5f)) - 0.05f;
+                float arrows = 9f;
+                for (int i = 0; i < 4; i++)
+                {
+                    var rot = Quaternion.Euler(0f, 0f, 90f * i);
+                    Vector2 a = rot * new Vector3(0.72f, 0f, 0f), b = rot * new Vector3(0.95f, 0f, 0f);
+                    Vector2 s1 = rot * new Vector3(0.72f, 0.14f, 0f), s2 = rot * new Vector3(0.72f, -0.14f, 0f);
+                    arrows = Mathf.Min(arrows, Polygon(p, new[] { b, s1, s2 }));
+                    arrows = Mathf.Min(arrows, Segment(p, rot * new Vector3(0.55f, 0f, 0f), a, 0.04f));
+                }
+                return Mathf.Min(Mathf.Min(ring, arrows), Circle(p, Vector2.zero, 0.12f));
+            }, Color.white, 0f, 0);
+
+            // Over a bomb balloon: don't touch it (a hand with a red no-entry slash), then cup it with two hands.
+            Icon("NoTouchIcon", 256, Badge(new Color(1f, 0.9f, 0.86f), new[]
+            {
+                L(p => Hand(p * 1.05f) / 1.05f, new Color(0.93f, 0.64f, 0.48f), 0.05f),
+                L(p => Mathf.Abs(Circle(p, Vector2.zero, 0.74f)) - 0.075f, new Color(0.88f, 0.2f, 0.18f), 0.03f),
+                L(p => Segment(p, new Vector2(-0.52f, 0.52f), new Vector2(0.52f, -0.52f), 0.075f), new Color(0.88f, 0.2f, 0.18f), 0.03f)
+            }));
+            Icon("CupHand", 128, new[]
+            {
+                L(p => Hand(new Vector2(p.y, -p.x) * 1.05f) / 1.05f, new Color(0.93f, 0.64f, 0.48f), 0.07f)
+            });
+            Icon("CupBadge", 256, Badge(new Color(1f, 0.82f, 0.78f), new Layer[0]));
+
+            // Over a jamming tower: a wi-fi signal, struck through.
+            Icon("JamIcon", 256, Badge(new Color(0.85f, 0.88f, 0.95f), new[]
+            {
+                L(p => Mathf.Min(Mathf.Min(SignalArc(p, 0.66f), SignalArc(p, 0.43f)), Mathf.Min(SignalArc(p, 0.2f), Circle(p, new Vector2(0f, -0.4f), 0.09f))),
+                    new Color(0.2f, 0.36f, 0.62f), 0f),
+                L(p => Segment(p, new Vector2(-0.52f, 0.52f), new Vector2(0.52f, -0.52f), 0.075f), new Color(0.88f, 0.2f, 0.18f), 0.03f)
+            }));
+
+            // The plane knob and finish flag on the HUD's progress bar.
+            Icon("PlaneBadge", 256, Badge(new Color(0.75f, 0.95f, 0.9f), new[]
+            {
+                L(p => RoundedBox(p, new Vector2(0.06f, 0f), new Vector2(0.14f, 0.56f), 0.1f), Teal, 0.045f),
+                L(p => RoundedBox(p, new Vector2(-0.44f, 0f), new Vector2(0.08f, 0.24f), 0.06f), Teal, 0.045f),
+                L(p => RoundedBox(p, new Vector2(0f, 0f), new Vector2(0.56f, 0.12f), 0.12f), Teal, 0.045f),
+                L(p => Ellipse(p, new Vector2(0.2f, 0f), new Vector2(0.13f, 0.07f)), Plum, 0f),
+                L(p => RoundedBox(p, new Vector2(0.6f, 0f), new Vector2(0.03f, 0.2f), 0.03f), Cream, 0.03f)
+            }));
+            Icon("FlagBadge", 256, Badge(new Color(0.9f, 0.9f, 0.9f), new[]
+            {
+                L(p => Segment(p, new Vector2(-0.34f, -0.6f), new Vector2(-0.34f, 0.56f), 0.045f), new Color(0.45f, 0.36f, 0.3f), 0.03f),
+                L(p => RoundedBox(p, new Vector2(0.06f, 0.24f), new Vector2(0.38f, 0.27f), 0.03f), Color.white, 0.045f),
+                L(p => Checker(p, new Vector2(-0.32f, -0.03f), 4, 2, 0.19f, 0.27f), Ink, 0f)
+            }));
+
+            // Pictures used in the tutorials' intro text.
+            Icon("FighterIcon", 256, Badge(new Color(1f, 0.82f, 0.76f), new[]
+            {
+                L(p => Polygon(p, FighterOutline), Coral, 0.045f),
+                L(p => Ellipse(p, new Vector2(0.24f, 0f), new Vector2(0.13f, 0.065f)), Plum, 0f)
+            }));
+            Icon("BomberIcon", 256, Badge(new Color(1f, 0.8f, 0.74f), new[]
+            {
+                L(p => RoundedBox(p, new Vector2(0.04f, 0f), new Vector2(0.15f, 0.66f), 0.08f), DarkCoral, 0.045f),
+                L(p => RoundedBox(p, new Vector2(-0.5f, 0f), new Vector2(0.08f, 0.28f), 0.05f), DarkCoral, 0.045f),
+                L(p => RoundedBox(p, new Vector2(0f, 0f), new Vector2(0.6f, 0.14f), 0.14f), DarkCoral, 0.045f),
+                L(p => Mathf.Min(Circle(p, new Vector2(0.14f, 0.36f), 0.1f), Circle(p, new Vector2(0.14f, -0.36f), 0.1f)), Cream, 0.035f),
+                L(p => Ellipse(p, new Vector2(0.32f, 0f), new Vector2(0.12f, 0.07f)), Plum, 0f)
+            }));
+            Icon("ZeppelinIcon", 256, Badge(new Color(1f, 0.84f, 0.78f), new[]
+            {
+                L(p => Polygon(p, ZeppelinFin), Coral, 0.04f),
+                L(p => RoundedBox(p, new Vector2(0.05f, -0.27f), new Vector2(0.2f, 0.08f), 0.06f), Cream, 0.04f),
+                L(p => Ellipse(p, new Vector2(0.02f, 0.08f), new Vector2(0.66f, 0.3f)), Coral, 0.045f),
+                L(p => Mathf.Max(Ellipse(p, new Vector2(0.02f, 0.08f), new Vector2(0.64f, 0.28f)), Mathf.Abs(p.x + 0.36f) - 0.045f), Cream, 0f),
+                L(p => Mathf.Max(Ellipse(p, new Vector2(0.02f, 0.08f), new Vector2(0.64f, 0.28f)), Mathf.Abs(p.x + 0.5f) - 0.03f), Cream, 0f),
+                L(p => Mathf.Min(RoundedBox(p, new Vector2(-0.02f, -0.27f), new Vector2(0.04f, 0.03f), 0.01f),
+                    RoundedBox(p, new Vector2(0.12f, -0.27f), new Vector2(0.04f, 0.03f), 0.01f)), Plum, 0f)
+            }));
+            Icon("TubeIcon", 256, Badge(new Color(1f, 0.88f, 0.72f), new[]
+            {
+                L(p => RoundedBox(p, Vector2.zero, new Vector2(0.5f, 0.27f), 0.04f), new Color(1f, 0.93f, 0.8f), 0.04f),
+                L(p => Mathf.Abs(Ellipse(p, new Vector2(-0.5f, 0f), new Vector2(0.1f, 0.3f))) - 0.05f, Orange, 0.03f),
+                L(p => Mathf.Abs(Ellipse(p, new Vector2(0.5f, 0f), new Vector2(0.1f, 0.3f))) - 0.05f, Orange, 0.03f),
+                L(p => Mathf.Abs(Ellipse(p, Vector2.zero, new Vector2(0.08f, 0.27f))) - 0.025f, Orange, 0f),
+                L(p => Segment(p, new Vector2(-0.28f, 0.1f), new Vector2(0.28f, 0.1f), 0.02f), Color.white, 0f)
+            }));
+            Icon("MissileIcon", 256, Badge(new Color(1f, 0.86f, 0.78f), new[]
+            {
+                L(p => Ellipse(p, new Vector2(-0.62f, 0f), new Vector2(0.14f, 0.08f)), new Color(1f, 0.78f, 0.25f), 0.03f),
+                L(p => Polygon(p, MissileFins), Coral, 0.04f),
+                L(p => RoundedBox(p, new Vector2(-0.06f, 0f), new Vector2(0.44f, 0.13f), 0.1f), Cream, 0.045f),
+                L(p => Ellipse(p, new Vector2(0.4f, 0f), new Vector2(0.22f, 0.13f)), Coral, 0.045f),
+                L(p => RoundedBox(p, new Vector2(0.12f, 0f), new Vector2(0.03f, 0.13f), 0f), Coral, 0f)
+            }));
+
             Write("Crosshair", 128, p =>
             {
                 float ring = Mathf.Abs(Circle(p, Vector2.zero, 0.72f)) - 0.05f;
@@ -83,6 +184,68 @@ namespace MiniPlanes.Editor
             }, Color.white, 0f, 0);
             AssetDatabase.Refresh();
             ConfigureImports();
+        }
+
+        static readonly Color Teal = new Color(0.24f, 0.62f, 0.56f, 1f);
+        static readonly Color Coral = new Color(0.9f, 0.42f, 0.32f, 1f);
+        static readonly Color DarkCoral = new Color(0.74f, 0.28f, 0.24f, 1f);
+        static readonly Color Plum = new Color(0.42f, 0.24f, 0.3f, 1f);
+        static readonly Color Orange = new Color(1f, 0.56f, 0.22f, 1f);
+
+        static readonly Vector2[] FighterOutline =
+        {
+            new Vector2(0.64f, 0f), new Vector2(0.4f, 0.09f), new Vector2(0.08f, 0.11f), new Vector2(-0.22f, 0.6f),
+            new Vector2(-0.36f, 0.58f), new Vector2(-0.2f, 0.11f), new Vector2(-0.46f, 0.09f), new Vector2(-0.6f, 0.3f),
+            new Vector2(-0.7f, 0.28f), new Vector2(-0.62f, 0f), new Vector2(-0.7f, -0.28f), new Vector2(-0.6f, -0.3f),
+            new Vector2(-0.46f, -0.09f), new Vector2(-0.2f, -0.11f), new Vector2(-0.36f, -0.58f), new Vector2(-0.22f, -0.6f),
+            new Vector2(0.08f, -0.11f), new Vector2(0.4f, -0.09f)
+        };
+
+        static readonly Vector2[] ZeppelinFin =
+        {
+            new Vector2(-0.46f, 0.22f), new Vector2(-0.7f, 0.5f), new Vector2(-0.8f, 0.46f), new Vector2(-0.72f, 0.08f),
+            new Vector2(-0.8f, -0.24f), new Vector2(-0.7f, -0.26f), new Vector2(-0.46f, -0.04f)
+        };
+
+        static readonly Vector2[] MissileFins =
+        {
+            new Vector2(-0.3f, 0.1f), new Vector2(-0.5f, 0.32f), new Vector2(-0.58f, 0.3f), new Vector2(-0.5f, 0f),
+            new Vector2(-0.58f, -0.3f), new Vector2(-0.5f, -0.32f), new Vector2(-0.3f, -0.1f)
+        };
+
+        /// <summary>One wi-fi arc: a ring segment opening upward, centred low in the badge.</summary>
+        static float SignalArc(Vector2 p, float radius)
+        {
+            Vector2 c = new Vector2(0f, -0.4f);
+            Vector2 d = p - c;
+            float ring = Mathf.Abs(d.magnitude - radius) - 0.06f;
+            // Keep only the upward-facing 90 degrees.
+            float angle = Mathf.Atan2(Mathf.Abs(d.x), d.y);
+            float wedge = (angle - 0.785f) * d.magnitude;
+            return Mathf.Max(ring, wedge);
+        }
+
+        /// <summary>An open hand, fingers up, palm toward the viewer.</summary>
+        static float Hand(Vector2 p)
+        {
+            float d = RoundedBox(p, new Vector2(0f, -0.2f), new Vector2(0.27f, 0.27f), 0.12f);
+            d = Mathf.Min(d, Segment(p, new Vector2(-0.19f, 0f), new Vector2(-0.22f, 0.4f), 0.07f));
+            d = Mathf.Min(d, Segment(p, new Vector2(-0.065f, 0.02f), new Vector2(-0.07f, 0.52f), 0.07f));
+            d = Mathf.Min(d, Segment(p, new Vector2(0.065f, 0.02f), new Vector2(0.07f, 0.48f), 0.07f));
+            d = Mathf.Min(d, Segment(p, new Vector2(0.19f, 0f), new Vector2(0.21f, 0.32f), 0.065f));
+            d = Mathf.Min(d, Segment(p, new Vector2(0.22f, -0.28f), new Vector2(0.44f, -0.02f), 0.075f));
+            return d;
+        }
+
+        /// <summary>A grid of alternating filled squares, starting at the bottom-left corner.</summary>
+        static float Checker(Vector2 p, Vector2 corner, int cols, int rows, float w, float h)
+        {
+            float d = 9f;
+            for (int x = 0; x < cols; x++)
+                for (int y = 0; y < rows; y++)
+                    if ((x + y) % 2 == 0)
+                        d = Mathf.Min(d, RoundedBox(p, corner + new Vector2((x + 0.5f) * w, (y + 0.5f) * h), new Vector2(w * 0.5f, h * 0.5f), 0f));
+            return d;
         }
 
         static readonly Vector2[] ShieldOutline =
@@ -176,6 +339,7 @@ namespace MiniPlanes.Editor
                 bool dirty = importer.textureType != TextureImporterType.Sprite || !importer.alphaIsTransparency ||
                              importer.wrapMode != TextureWrapMode.Clamp || !importer.mipmapEnabled;
                 if (Path.GetFileNameWithoutExtension(path) == "Rounded" && importer.spriteBorder == Vector4.zero) dirty = true;
+                if (Path.GetFileNameWithoutExtension(path) == "RoundedGlass") continue;
                 if (!dirty) continue;
                 importer.textureType = TextureImporterType.Sprite;
                 importer.spriteImportMode = SpriteImportMode.Single;
@@ -185,6 +349,43 @@ namespace MiniPlanes.Editor
                 if (Path.GetFileNameWithoutExtension(path) == "Rounded") importer.spriteBorder = new Vector4(24, 24, 24, 24);
                 importer.SaveAndReimport();
             }
+        }
+
+        /// <summary>
+        /// The glass panel sprite: the same rounded box as "Rounded" (and the same 9-slice border), with how far
+        /// each pixel is inside the edge stored in red, so the glass shader can bevel and catch light at the rim.
+        /// </summary>
+        static void WriteGlass(string name, int size, int border)
+        {
+            string path = Dir + "/" + name + ".png";
+            if (File.Exists(path)) return;
+            var px = new Color[size * size];
+            float pixel = 2f / size;
+            const float bevel = 0.42f;
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    var p = new Vector2((x + 0.5f) * pixel - 1f, (y + 0.5f) * pixel - 1f);
+                    float d = RoundedBox(p, Vector2.zero, new Vector2(1f, 1f), 0.5f);
+                    float alpha = Mathf.Clamp01(0.5f - d / pixel);
+                    float inside = Mathf.Clamp01(-d / bevel);
+                    px[y * size + x] = new Color(inside, inside, inside, alpha);
+                }
+            }
+            var tex = new Texture2D(size, size, TextureFormat.RGBA32, false, true);
+            tex.SetPixels(px);
+            tex.Apply();
+            File.WriteAllBytes(path, tex.EncodeToPNG());
+            UnityEngine.Object.DestroyImmediate(tex);
+            AssetDatabase.ImportAsset(path);
+            var importer = (TextureImporter)AssetImporter.GetAtPath(path);
+            importer.textureType = TextureImporterType.Sprite;
+            importer.spriteImportMode = SpriteImportMode.Single;
+            importer.spriteBorder = new Vector4(border, border, border, border);
+            importer.sRGBTexture = false;
+            importer.alphaIsTransparency = false;
+            importer.SaveAndReimport();
         }
 
         public static Sprite Load(string name)

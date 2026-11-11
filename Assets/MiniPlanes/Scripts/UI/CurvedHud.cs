@@ -18,6 +18,12 @@ namespace MiniPlanes
         [Header("Readouts")]
         [Tooltip("A Filled, horizontal Image.")]
         public Image progressFill;
+        [Tooltip("The bar the knob slides along. Its width sets the knob's travel.")]
+        public RectTransform progressTrack;
+        [Tooltip("The plane badge that slides along the bar to show how far the plane has flown.")]
+        public RectTransform progressKnob;
+        [Tooltip("The finish flag at the end of the bar.")]
+        public RectTransform finishFlag;
         public Text score;
         public Text level;
         public Text coins;
@@ -66,6 +72,16 @@ namespace MiniPlanes
             Progress = Mathf.Clamp01(value);
             if (progressFill != null && !Mathf.Approximately(progressFill.fillAmount, Progress))
                 progressFill.fillAmount = Progress;
+            if (progressKnob != null && progressTrack != null)
+            {
+                float half = progressTrack.rect.width * 0.5f;
+                var at = progressTrack.anchoredPosition + new Vector2(Mathf.Lerp(-half, half, Progress), 0f);
+                if ((progressKnob.anchoredPosition - at).sqrMagnitude > 0.25f)
+                {
+                    progressKnob.anchoredPosition = at;
+                    CurvedCanvas.MarkDirty(progressKnob);
+                }
+            }
         }
 
         public void SetScore(int value)

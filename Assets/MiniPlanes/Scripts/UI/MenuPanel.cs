@@ -56,6 +56,8 @@ namespace MiniPlanes
         public Text introNumber;
         public Text introTitle;
         public Text introCaption;
+        [Tooltip("Draws {key} icons, such as {fighter}, in the intro text. Added automatically if missing.")]
+        public InlineIcons introIcons;
         public Image[] introLives = new Image[0];
         public PokeButton introStart;
         public PokeButton introBack;
@@ -65,8 +67,15 @@ namespace MiniPlanes
         public Text resultDetail;
         public Text resultScore;
         public Text resultCoins;
+        [Tooltip("The coins the player has now, shown on the result page.")]
+        public Text resultWallet;
         public PokeButton nextButton;
         public Text nextLabel;
+        [Tooltip("Infinite's game-over page: carry on for coins. Hidden on other results.")]
+        public PokeButton respawnButton;
+        public Text respawnLabel;
+        [Tooltip("The respawn label when the player can't afford it.")]
+        public Color respawnUnaffordableText = new Color(0.47f, 0.47f, 0.47f, 1f);
 
         [Header("Hangar")]
         public Text hangarCoins;
@@ -104,6 +113,7 @@ namespace MiniPlanes
         public event Action MenuChosen;
         public event Action StartChosen;
         public event Action BackChosen;
+        public event Action RespawnChosen;
         /// <summary>The player changed which plane they fly, or its paint.</summary>
         public event Action PlaneChanged;
 
@@ -121,6 +131,13 @@ namespace MiniPlanes
         void Awake()
         {
             if (poke != null) poke.Clicked += OnClicked;
+            if (introCaption != null && introIcons == null)
+            {
+                introIcons = introCaption.GetComponent<InlineIcons>();
+                if (introIcons == null) introIcons = introCaption.gameObject.AddComponent<InlineIcons>();
+            }
+            if (introIcons != null && (introIcons.icons == null || introIcons.icons.Length == 0) && art != null)
+                introIcons.icons = art.captionIcons;
             if (planeAction != null) planeAction.disabledColor = actionUnavailable;
             Close();
         }
@@ -170,7 +187,8 @@ namespace MiniPlanes
             Open(introPage, 30);
             if (introNumber != null) introNumber.text = "LEVEL " + levelNumber;
             if (introTitle != null) introTitle.text = title;
-            if (introCaption != null) introCaption.text = caption;
+            if (introIcons != null) introIcons.SetText(caption);
+            else if (introCaption != null) introCaption.text = caption;
             for (int i = 0; i < introLives.Length; i++)
                 if (introLives[i] != null) introLives[i].gameObject.SetActive(i < lives);
         }
@@ -186,8 +204,63 @@ namespace MiniPlanes
             if (resultDetail != null) resultDetail.text = detail;
             if (resultScore != null) resultScore.text = score;
             if (resultCoins != null) resultCoins.text = coinsEarned > 0 ? "+" + coinsEarned + " COINS" : "";
+            if (resultWallet != null) resultWallet.text = Progression.Coins.ToString();
             if (nextButton != null) nextButton.gameObject.SetActive(canContinue);
             if (nextLabel != null) nextLabel.text = next;
+            if (respawnButton != null) respawnButton.gameObject.SetActive(false);
+        }
+
+        /// <summary>Shows the Respawn button on the result page, with its price, greyed out if unaffordable.</summary>
+        public void OfferRespawn(int cost, bool affordable)
+        {
+            if (respawnButton == null) return;
+            if (nextButton != null) nextButton.gameObject.SetActive(false);
+            respawnButton.gameObject.SetActive(true);
+            respawnButton.disabledColor = actionUnavailable;
+            respawnButton.Interactable = affordable;
+            if (respawnLabel != null)
+            {
+                respawnLabel.text = "RESPAWN\n" + cost + " COINS";
+                respawnLabel.color = affordable ? Color.white : respawnUnaffordableText;
+            }
+            if (resultPage != null) CurvedCanvas.MarkDirty(resultPage.transform);
+        }
+
+        /// <summary>Fades the open page in from clear, for example after the splash screen.</summary>
+        public void FadeIn(float seconds)
+        {
+            if (poke == null) return;
+            var group = poke.GetComponent<CanvasGroup>();
+            if (group == null) group = poke.gameObject.AddComponent<CanvasGroup>();
+            if (_fade != null) StopCoroutine(_fade);
+            _fade = StartCoroutine(FadeRoutine(group, seconds));
+        }
+
+        /// <summary>How opaque the menu is while fading in: 1 when fully shown.</summary>
+        public float Opacity
+        {
+            get
+            {
+                var group = poke != null ? poke.GetComponent<CanvasGroup>() : null;
+                return group != null ? group.alpha : 1f;
+            }
+        }
+
+        Coroutine _fade;
+
+        System.Collections.IEnumerator FadeRoutine(CanvasGroup group, float seconds)
+        {
+            float t = 0f;
+            group.alpha = 0f;
+            while (t < seconds)
+            {
+                t += Time.deltaTime;
+                float k = Mathf.Clamp01(t / Mathf.Max(0.01f, seconds));
+                group.alpha = k * k * (3f - 2f * k);
+                yield return null;
+            }
+            group.alpha = 1f;
+            _fade = null;
         }
 
         public void ShowHangar()
@@ -397,6 +470,7 @@ namespace MiniPlanes
                 case "start": StartChosen?.Invoke(); return;
                 case "back": BackChosen?.Invoke(); return;
                 case "next": NextChosen?.Invoke(); return;
+                case "respawn": RespawnChosen?.Invoke(); return;
                 case "retry": RetryChosen?.Invoke(); return;
                 case "menu": MenuChosen?.Invoke(); return;
                 case "plane_action": PlaneAction(); return;

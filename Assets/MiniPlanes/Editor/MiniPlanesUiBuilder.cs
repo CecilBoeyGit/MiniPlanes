@@ -38,7 +38,7 @@ namespace MiniPlanes.Editor
 
         public class Prefabs
         {
-            public GameObject menu, hud, pause, wrist, shieldIcon, bombIcon, turretIcon, crosshair, fuelGauge;
+            public GameObject splash, menu, hud, pause, wrist, shieldIcon, bombIcon, turretIcon, lifeIcon, jamIcon, noTouchIcon, cupIcon, crosshair, dragCursor, fuelGauge;
         }
 
         public static Prefabs EnsureAll(GameArt art)
@@ -59,15 +59,26 @@ namespace MiniPlanes.Editor
                 menu = Ensure("MenuPanel", BuildMenu, existing =>
                 {
                     var m = existing.GetComponent<MenuPanel>();
-                    return m == null || m.levelRows == null || m.levelRows.Length < Progression.TutorialLevelCount;
+                    return m == null || m.levelRows == null || m.levelRows.Length < Progression.TutorialLevelCount || m.respawnButton == null || m.resultWallet == null;
                 }),
-                hud = Ensure("CockpitHUD", BuildHud),
+                // Rebuilt once if it predates the plane knob on the progress bar.
+                splash = Ensure("SplashPanel", BuildSplash),
+                hud = Ensure("CockpitHUD", BuildHud, existing =>
+                {
+                    var h = existing.GetComponent<CurvedHud>();
+                    return h == null || h.progressKnob == null || h.finishFlag == null;
+                }),
                 pause = Ensure("PausePanel", BuildPause),
                 wrist = Ensure("WristMenuButton", BuildWrist),
                 shieldIcon = Ensure("ShieldIcon", () => BuildIcon("ShieldIcon", "ShieldIcon")),
                 bombIcon = Ensure("BombIcon", () => BuildIcon("BombIcon", "BombIcon")),
                 turretIcon = Ensure("TurretIcon", () => BuildIcon("TurretIcon", "TurretIcon")),
+                lifeIcon = Ensure("LifeIcon", () => BuildIcon("LifeIcon", "LifeIcon")),
+                jamIcon = Ensure("JamIcon", () => BuildIcon("JamIcon", "JamIcon")),
+                noTouchIcon = Ensure("NoTouchIcon", () => BuildIcon("NoTouchIcon", "NoTouchIcon")),
+                cupIcon = Ensure("CupIcon", BuildCupIcon),
                 crosshair = Ensure("Crosshair", BuildCrosshair),
+                dragCursor = Ensure("DragCursor", BuildDragCursor),
                 fuelGauge = Ensure("FuelGauge", BuildFuelGauge)
             };
         }
@@ -364,7 +375,11 @@ namespace MiniPlanes.Editor
             menu.resultDetail = Txt(page, "Detail", "", 30, _font, Muted, TextAnchor.MiddleCenter, At(60f, 150f, MenuW - 120f, 110f));
             menu.resultScore = Txt(page, "Score", "SCORE  0", 52, _heading, Ink, TextAnchor.MiddleCenter, At(0f, 266f, MenuW, 80f));
             menu.resultCoins = Txt(page, "Coins", "", 34, _heading, Gold, TextAnchor.MiddleCenter, At(0f, 346f, MenuW, 56f));
+            CoinSlot(page, 830f, 32f, out menu.resultWallet);
             menu.nextButton = Btn(page, "next", "NEXT", 36, Teal, TealDark, At(44f, 448f, 276f, 150f), out menu.nextLabel);
+            // Shares the Next slot: only Infinite's game-over page shows it.
+            menu.respawnButton = Btn(page, "respawn", "RESPAWN\n50 COINS", 30, Gold, Teal, At(44f, 448f, 276f, 150f), out menu.respawnLabel);
+            menu.respawnButton.gameObject.SetActive(false);
             Btn(page, "retry", "RETRY", 36, Seafoam, Teal, At(362f, 448f, 276f, 150f), out _);
             Btn(page, "menu", "MENU", 36, Slate, SlateDark, At(680f, 448f, 276f, 150f), out _);
         }
@@ -443,13 +458,16 @@ namespace MiniPlanes.Editor
             var strip = Page(canvas, "Strip");
             hud.strip = strip.gameObject;
             Img(strip, "Plate", _rounded, HudPlate, Centre(0f, 0f, 1880f, 96f));
-            Img(strip, "ProgressTrack", _rounded, new Color(HudCream.r, HudCream.g, HudCream.b, 0.22f), Centre(0f, 0f, 1060f, 20f));
-            var fill = Img(strip, "ProgressFill", _white, HudAccent, Centre(0f, 0f, 1048f, 12f));
+            var track = Img(strip, "ProgressTrack", _rounded, new Color(HudCream.r, HudCream.g, HudCream.b, 0.22f), Centre(0f, 0f, 960f, 20f));
+            hud.progressTrack = track.rectTransform;
+            var fill = Img(strip, "ProgressFill", _white, HudAccent, Centre(0f, 0f, 948f, 12f));
             fill.type = Image.Type.Filled;
             fill.fillMethod = Image.FillMethod.Horizontal;
             fill.fillOrigin = 0;
             fill.fillAmount = 0f;
             hud.progressFill = fill;
+            hud.finishFlag = Img(strip, "FinishFlag", MiniPlanesUiSprites.Load("FlagBadge"), Color.white, Centre(512f, 0f, 62f, 62f)).rectTransform;
+            hud.progressKnob = Img(strip, "PlaneKnob", MiniPlanesUiSprites.Load("PlaneBadge"), Color.white, Centre(-480f, 0f, 70f, 70f)).rectTransform;
             hud.score = Txt(strip, "Score", "0", 56, _heading, HudCream, TextAnchor.MiddleCenter, Centre(-800f, 0f, 200f, 90f));
             hud.level = Txt(strip, "Level", "LV 1", 52, _heading, HudCream, TextAnchor.MiddleCenter, Centre(800f, 0f, 220f, 90f));
             var hearts = new List<Image>();
@@ -471,6 +489,30 @@ namespace MiniPlanes.Editor
         }
 
         // ---------------------------------------------------------------- pause
+
+        /// <summary>The opening screen: the logo, and a Start button that fades in under it.</summary>
+        static GameObject BuildSplash()
+        {
+            var root = new GameObject("SplashPanel");
+            var splash = root.AddComponent<SplashPanel>();
+            var canvas = CurvedPanel(root, "Canvas", 0.62f, 0f, new Vector2(1300f, 940f), 30, out var follow, out var poke);
+            follow.unscaledTime = true;
+            splash.follow = follow;
+            splash.poke = poke;
+
+            var logoGo = new GameObject("Logo", typeof(RectTransform));
+            logoGo.transform.SetParent(canvas, false);
+            Stretch((RectTransform)logoGo.transform);
+            splash.logo = logoGo.AddComponent<CanvasGroup>();
+            var logo = Img((RectTransform)logoGo.transform, "LogoImage", MiniPlanesUiSprites.Load("SkyLooperLogo"), Color.white, Centre(0f, 110f, 1240f, 620f));
+            logo.preserveAspect = true;
+            logo.raycastTarget = false;
+
+            var start = Btn(canvas, SplashPanel.StartId, "START", 60, Teal, TealDark, Centre(0f, -330f, 440f, 150f), out _);
+            splash.startButton = start.gameObject.AddComponent<CanvasGroup>();
+            AddCursors(canvas, poke);
+            return root;
+        }
 
         static GameObject BuildPause()
         {
@@ -519,6 +561,32 @@ namespace MiniPlanes.Editor
             var canvas = FlatCanvas(root.transform, "Canvas", new Vector2(110f, 110f), 6);
             canvas.gameObject.AddComponent<CanvasGroup>();
             Img(canvas, "Ring", MiniPlanesUiSprites.Load("Crosshair"), Color.white, Stretch);
+            return root;
+        }
+
+        /// <summary>Two hands closing round a blinking bomb, animated by CupIconMotion.</summary>
+        static GameObject BuildCupIcon()
+        {
+            var root = new GameObject("CupIcon");
+            root.AddComponent<Billboard>();
+            var canvas = FlatCanvas(root.transform, "Canvas", new Vector2(64f, 64f), 6);
+            Img(canvas, "Badge", MiniPlanesUiSprites.Load("CupBadge"), Color.white, Stretch);
+            var motion = root.AddComponent<CupIconMotion>();
+            motion.bomb = Img(canvas, "Bomb", MiniPlanesUiSprites.Load("Circle"), motion.bombColor, Centre(0f, 0f, 16f, 16f));
+            motion.leftHand = Img(canvas, "LeftHand", MiniPlanesUiSprites.Load("CupHand"), Color.white, Centre(-22f, 0f, 36f, 36f)).rectTransform;
+            var right = Img(canvas, "RightHand", MiniPlanesUiSprites.Load("CupHand"), Color.white, Centre(22f, 0f, 36f, 36f)).rectTransform;
+            right.localScale = new Vector3(-1f, 1f, 1f);
+            motion.rightHand = right;
+            return root;
+        }
+
+        static GameObject BuildDragCursor()
+        {
+            var root = new GameObject("DragCursor");
+            root.AddComponent<Billboard>();
+            var canvas = FlatCanvas(root.transform, "Canvas", new Vector2(90f, 90f), 6);
+            canvas.gameObject.AddComponent<CanvasGroup>();
+            Img(canvas, "Arrows", MiniPlanesUiSprites.Load("DragCursor"), Color.white, Stretch);
             return root;
         }
 
