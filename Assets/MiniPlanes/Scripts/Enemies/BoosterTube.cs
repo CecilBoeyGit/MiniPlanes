@@ -10,8 +10,8 @@ namespace MiniPlanes
     /// A booster tube powerup: a glass tube about as wide as a C ring, straight or curved, short or long.
     /// Pinch it to pick it up; it keeps its angle in your hand, like a real object, so you can line it up
     /// with where you remember the path goes. The plane flying in one end and out the other without
-    /// touching the wall gets a speed boost, and the tube is used up. The plane touching the wall, or a hand
-    /// knocking into it, breaks the tube with no boost.
+    /// touching the wall gets a speed boost, and the tube is used up. The plane touching the wall breaks the
+    /// tube with no boost. Hands never break it: it only goes when its time runs out or the plane meets it.
     /// </summary>
     public class BoosterTube : MonoBehaviour
     {
@@ -21,8 +21,6 @@ namespace MiniPlanes
         public static event Action<BoosterTube> AnyBoosted;
         /// <summary>The plane touched a tube's wall and broke it.</summary>
         public static event Action<BoosterTube> AnyWallHit;
-        /// <summary>A hand knocked into a tube and broke it.</summary>
-        public static event Action<BoosterTube> AnyKnocked;
 
         static readonly int AlphaId = Shader.PropertyToID("_Alpha");
         static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
@@ -36,10 +34,6 @@ namespace MiniPlanes
         public float grabReach = 0.035f;
         [Tooltip("How quickly a held tube catches up with the hand. Higher is stiffer.")]
         public float followSharpness = 25f;
-        [Tooltip("A hand moving at least this fast into the tube breaks it, in metres per second. Slower touches, and pinching it to pick it up, don't.")]
-        public float knockSpeed = 0.6f;
-        [Tooltip("Seconds after letting go before a hand can knock the tube, so the hand that placed it doesn't break it.")]
-        public float knockGraceSeconds = 0.6f;
         public Color rimColor = new Color(1f, 0.56f, 0.22f, 1f);
         public Color glassColor = new Color(1f, 0.78f, 0.45f, 1f);
 
@@ -51,6 +45,8 @@ namespace MiniPlanes
         /// <summary>Bend radius of a curved tube; 0 for a straight one.</summary>
         public float BendRadius { get; private set; }
         public bool PlaneInside => _state == PassState.Inside;
+        /// <summary>Seconds before the tube vanishes by itself. Holding it pauses the count.</summary>
+        public float TimeLeft => _life;
         public Vector3 Position => transform.position;
 
         enum PassState { Outside, Inside }
@@ -72,9 +68,7 @@ namespace MiniPlanes
         MeshRenderer _glass;
         MaterialPropertyBlock _glassBlock;
         float _glassAlpha = 0.85f;
-        HandSource[] _hands;
-        float _releasedAt = -10f;
-        readonly List<BoneSegment> _segments = new List<BoneSegment>(32);
+
 
         /// <summary>Length and bend radius of each shape, in metres.</summary>
         public static void Dimensions(TubeShape shape, out float length, out float bendRadius)
@@ -92,7 +86,6 @@ namespace MiniPlanes
             HandSource[] hands = null)
         {
             Shape = shape;
-            _hands = hands;
             _cfg = cfg;
             _plane = plane;
             _life = cfg != null ? cfg.boosterTubeLifetime : 24f;
@@ -306,9 +299,7 @@ namespace MiniPlanes
 
         public void Release(object holder)
         {
-            if (_holder != holder) return;
-            _holder = null;
-            _releasedAt = Time.time;
+            if (_holder == holder) _holder = null;
         }
 
         /// <summary>Puts the tube somewhere at once. For tests and scripted placement.</summary>
@@ -355,34 +346,9 @@ namespace MiniPlanes
                 _glass.SetPropertyBlock(_glassBlock);
             }
 
-            if (CheckKnock()) return;
             CheckPlane();
         }
 
-        /// <summary>A hand swiping into the tube breaks it. True if it did.</summary>
-        bool CheckKnock()
-        {
-            if (_hands == null || IsHeld || GameManager.IsPaused) return false;
-            bool settled = Time.time - _releasedAt > knockGraceSeconds;
-            foreach (var h in _hands)
-            {
-                if (h == null || !h.IsTracked) continue;
-                float speed = HandMotion.Speed(h);
-                if (!settled || h.IsIndexPinching || speed < knockSpeed) continue;
-                if (!h.GetBoneSegments(_segments)) continue;
-                foreach (var seg in _segments)
-                {
-                    if (SurfaceDistance(seg.Start) < seg.Radius || SurfaceDistance(seg.End) < seg.Radius ||
-                        SurfaceDistance((seg.Start + seg.End) * 0.5f) < seg.Radius)
-                    {
-                        AnyKnocked?.Invoke(this);
-                        Break(ComicKind.Poof);
-                        return true;
-                    }
-                }
-            }
-            return false;
-        }
 
         void CheckPlane()
         {
@@ -468,6 +434,7 @@ namespace MiniPlanes
         void HitWall()
         {
             ComicVfx.Play(ComicKind.Spark, _plane.Position, 0.06f);
+            Sfx.Play(SoundKind.TubeBreak, transform.position);
             AnyWallHit?.Invoke(this);
             Break(ComicKind.Poof);
         }
