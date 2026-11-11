@@ -11,6 +11,7 @@ Total spent on 2026-11-03: 660 credits for 12 generations, including 3 rejected 
 On 2026-11-09: 165 credits for the Turret, Biplane and Pusher Racer (image-to-3D from Docs/ArtBible). The gold turret balloon is the blue one repainted in game, not a model.
 Later that day the Zeppelin (image-to-3D from `refs/v2/EnemyZeppelin.png`, a crop of `Docs/ArtBible/enemy-zeppelin-concept.png`) cost nothing: the account's one-time 8K Texture trial made it free.
 On 2026-11-11: 55 credits for the Jamming Tower (image-to-3D from `refs/v2/JammingTower.png`, a crop of `Docs/ArtBible/skylooper-jamming-tower-model-reference.png`; 8K Texture off).
+Later that day 55 credits for the Supersonic Jet, the 4th player plane (image-to-3D from `refs/v2/PlayerJet.png`, the hero view of `Docs/ArtBible/skylooper-supersonic-jet-model-reference.webp`; 8K Texture off, balance 61,651 to 61,596). It came out facing -X, so it needs `--rotate 0 0 90`. Its twin turret domes sit at about ±0.165 of the wingspan, 0.05 of the length behind the centre and 0.2 of the height above it. The barrel tips are at ±0.17 of the span and 0.06 of the length ahead of the centre.
 
 The three aircraft are image-to-3D, from the hero view of the Codex reference sheets in `Docs/ArtBible/*-model-reference.png`, cropped to `Tools/Tripo/refs/v2`. The balloons are still text-to-3D, from the prompts below. These aircraft raw files are `model_v2.glb`, and they bake to a 512 px texture because vertex colours smear the wing stripes.
 
@@ -21,6 +22,7 @@ The three aircraft are image-to-3D, from the hero view of the Codex reference sh
 | EnemyBomber | 2fda4b79-b294-419c-9f12-1e58b2ccf438 | `--rotate 0 0 0 --texture 512 --smooth 8` |
 | PlayerBiplane | c476f544-e426-4f4d-ba6b-772d582aca6c | `--rotate 0 0 0 --cut-front 0.12 --propeller --prop-span 0.42 --texture 512 --smooth 8` |
 | PlayerPusher | f87edfc0-2e3b-4b7f-ae0d-1f4ed5d08f7d | `--rotate 0 0 180 --texture 512 --smooth 8` (rear propeller stays part of the body) |
+| PlayerJet | 6d8a7ef6-50f6-42c6-b8a2-a63fd9b0f742 | `--rotate 0 0 90 --texture 512 --smooth 8` (exported at 2K; no propeller) |
 | Turret | 3c9873e4-9fa8-4abc-9909-b0ab4544929f | `--rotate 0 0 -90 --texture 256 --max-tris 2500 --smooth 6` |
 | EnemyZeppelin | f4d23ed5-769d-470f-9f98-aed5090979c0 | `--rotate 0 0 0 --texture 1024 --max-tris 6000 --smooth 6` (exported at 2K) |
 | JammingTower | 138b9144-c7e6-49d8-ab2f-358cdb9f5752 | `--rotate 0 0 0 --texture 512 --max-tris 3000 --smooth 6` (exported at 2K) |
