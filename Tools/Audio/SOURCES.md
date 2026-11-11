@@ -76,11 +76,18 @@ Steps (all in `make_title.py`):
 3. `Music/bgm_title` = the next 32.000 s. Its last 0.25 s blends, equal-power, from the recording's own repeat
    of bar 2 into bar 2 itself, so the loop end runs into its start with no click; the intro runs into the loop
    start because the cut points are consecutive samples of the recording. Both share one gain (loop at -16 LUFS).
-4. `Music/bgm_normal`, `bgm_hostile`, `bgm_uprise` = the same 32 s loop plus synthesized drums (four-on-the-floor,
-   claps, galloping hats, fills, crashes; harder and denser for hostile and the build) and layers made from the
-   recording itself (a saturated bass doubling, a gated copy in the title's da-da-.-da gallop for hostile, a gated
-   shimmer for the build), with a sidechain pump. Same melody, key, bars and length, so they crossfade in lock-step.
-   The drums land within about 4 ms of the recording's notes.
+4. `Music/bgm_normal`, `bgm_hostile`, `bgm_uprise` leave the recording itself out: its melody over the new drums
+   sounded like two tracks at once. Each is synthesized drums (four-on-the-floor, claps, galloping hats, fills,
+   crashes; harder and denser for hostile and the build), the recording's low end as bass (cut steeply at 200 Hz
+   so no melody leaks in, then saturated), and synthesized chords on the recording's own changes (`CHORDS` in the
+   script, measured per half bar from its bass notes and pitch content: B-flat major, Bb / Dm Gm / Ebmaj7 /
+   Eb F7sus / ...). The voicings carry the recording's colour notes; about 77% (median) of each half bar's notes in
+   the recording fall inside the chosen chord, the rest are its melody's passing notes.
+   - normal: a soft pad and electric-piano chords in the title's da-da-.-da gallop.
+   - hostile: a dark pad, brass stabs and a gated pad in the gallop, fast crushed arpeggios, a distorted bass.
+   - uprise: a bright pad and keys, a sixteenth shimmer an octave up, climbing arpeggios.
+   All three share key, chords, bars and length, so they crossfade in lock-step; the drums sit on the recording's
+   grid (within about 4 ms of its notes).
 5. The game plays the intro then the loop on the start page (`GameMusic.startMenu`, `startMenuIntro`). At boot the
    title cue starts it from the intro instead of playing `title.ogg` as a separate sound, so the opening isn't doubled.
    `Music/climax` (the finish hit) is in B-flat to match.

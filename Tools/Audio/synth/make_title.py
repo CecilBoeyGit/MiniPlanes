@@ -9,17 +9,16 @@ title.ogg; bars 2-17 are a 16-bar section that the recording repeats from bar 18
   Music/bgm_title         bars 2-17, a 32 s loop. Its end blends (0.25 s) into the recording's own repeat of
                           bar 2, so it joins its start with no click; the intro runs straight into it.
 
-The in-flight mixes are the same 32 s loop with layers added, so they share melody, key, bars and length and
-the game can crossfade between them at any moment:
+The in-flight mixes share the loop's key, chords, bars and length, so the game can crossfade between them at any
+moment. They leave the recording itself out (its melody over new drums sounded like two tracks at once): each is
+synthesized drums, the recording's low end as bass, and synthesized chords on the recording's measured changes:
 
-  Music/bgm_normal        the title loop, more intense: four-on-the-floor kick, claps, galloping hats and
-                          shaker, fills and crashes, a saturated bass doubling and a sidechain pump
-  Music/bgm_hostile       harder: driving kicks with sixteenth pickups, snare and tom fills, a distorted low end,
-                          a trance-gated copy of the recording in the title's gallop rhythm, a heavier pump
-  Music/bgm_uprise        the build to the finish: the biggest drums, open hats, rolls, brighter, a gated shimmer
-
-Every layer is either drums or the recording itself, filtered, saturated or gated, so nothing can clash
-with its harmony. Run with Blender's Python:  python -I Tools/Audio/synth/make_title.py
+  Music/bgm_normal        four-on-the-floor kick, claps, galloping hats and shaker, fills and crashes, the bass,
+                          a soft pad and electric-piano chords in the title's da-da-.-da gallop, a sidechain pump
+  Music/bgm_hostile       harder: driving kicks with sixteenth pickups, snare and tom fills, a distorted bass,
+                          brass stabs and a gated pad in the gallop, fast crushed arpeggios, a heavier pump
+  Music/bgm_uprise        the build to the finish: the biggest drums, open hats, rolls, bright pad and keys,
+                          a sixteenth shimmer an octave up and climbing arpeggios Run with Blender's Python:  python -I Tools/Audio/synth/make_title.py
 """
 import os
 import sys
@@ -74,6 +73,81 @@ def song_coords(loop):
 
 def loop_coords(x):
     return np.roll(x, -BLEND, axis=0)
+
+
+# The loop's chords, two per bar (bars 2-17 of the recording), measured from its bass notes and chroma:
+# Bb | Dm Gm | Ebmaj7 | Eb F7sus | Bb | Dm Bb | Gm7 Ebmaj7 | Gm7 Dm |
+# Gm Bb | F7sus Bb | Fsus Bb | Gm7 Dm | Gm Fsus | Gm | Fsus Bb | Bb Fsus
+# Voicings carry the colour notes the recording plays over each chord: the 9th on B-flat and E-flat, the 7th on
+# G minor; its "F sus" half bars are really B-flat over F (the D is strong), so they share the B-flat voicing.
+VOICING = {
+    "Bb": [53, 58, 62, 65, 72], "Dm": [53, 57, 62, 65], "Gm": [53, 58, 62, 67], "Gm7": [53, 58, 62, 67],
+    "Ebmaj7": [51, 55, 58, 62, 65], "F7sus": [53, 58, 60, 63], "Fsus": [53, 58, 62, 65, 72],
+}
+CHORDS = [
+    ("Bb", "Bb"), ("Dm", "Gm"), ("Ebmaj7", "Ebmaj7"), ("Ebmaj7", "F7sus"),
+    ("Bb", "Bb"), ("Dm", "Bb"), ("Gm7", "Ebmaj7"), ("Gm7", "Dm"),
+    ("Gm", "Bb"), ("F7sus", "Bb"), ("Fsus", "Bb"), ("Gm7", "Dm"),
+    ("Gm", "Fsus"), ("Gm", "Gm"), ("Fsus", "Bb"), ("Bb", "Fsus"),
+]
+
+
+def chord_bed(s):
+    """A soft pad on each half bar, and quiet electric-piano chords in the title's da-da-.-da gallop."""
+    for bar, halves in enumerate(CHORDS):
+        for h, name in enumerate(halves):
+            v = VOICING[name]
+            s.chord("pad", bar * 4 + 2 * h, 1.95, v, ins.saw_pad, 0.22, spread=0.8, attack=0.06, rel=0.25,
+                    cutoff=1800, voices=2)
+            for beat in range(2):
+                for st in mm.GALLOP:
+                    s.chord("keys", bar * 4 + 2 * h + beat + st * 0.25, 0.16, v, ins.ep, 0.3 if st == 0 else 0.2,
+                            spread=0.6)
+
+
+def hard_bed(s):
+    """Enemy planes up: dark sustained pad, brass stabs and a gated pad in the gallop, fast crushed arpeggios."""
+    for bar, halves in enumerate(CHORDS):
+        for h, name in enumerate(halves):
+            v = VOICING[name]
+            t0 = bar * 4 + 2 * h
+            s.chord("pad", t0, 1.95, v, ins.saw_pad, 0.16, spread=0.8, attack=0.04, rel=0.2, cutoff=1300, voices=2)
+            for beat in range(2):
+                for st in mm.GALLOP:
+                    s.chord("stab", t0 + beat + st * 0.25, 0.16, v, ins.brass_stab, 0.2 if st == 0 else 0.13,
+                            spread=0.7, cutoff=3400)
+                for st in range(4):
+                    if st == 2:
+                        continue
+                    s.chord("gpad", t0 + beat + st * 0.25, 0.14, [m + 12 for m in v], ins.saw_pad, 0.1, spread=0.9,
+                            attack=0.004, rel=0.04, cutoff=2800, voices=2)
+            tones = sorted(set(v)) + [m + 12 for m in sorted(set(v))]
+            for i in range(8):
+                idx = (0, 2, 4, 6, 7, 5, 3, 1)[i] % len(tones)
+                s.note("arp", t0 + i * 0.25, 0.14, tones[idx] + 12, ins.pulse, 0.22, (i % 2) * 0.8 - 0.4,
+                       duty=0.125, tilt=5.0, rel=0.03)
+
+
+def build_bed(s):
+    """The build: bright pad, electric-piano chords in the gallop, a sixteenth shimmer an octave up and
+    arpeggios climbing through each chord."""
+    for bar, halves in enumerate(CHORDS):
+        for h, name in enumerate(halves):
+            v = VOICING[name]
+            t0 = bar * 4 + 2 * h
+            s.chord("pad", t0, 1.95, [m + 12 for m in v], ins.saw_pad, 0.16, spread=0.9, attack=0.08, rel=0.3,
+                    cutoff=3200, voices=2)
+            for beat in range(2):
+                for st in mm.GALLOP:
+                    s.chord("keys", t0 + beat + st * 0.25, 0.16, v, ins.ep, 0.32 if st == 0 else 0.22, spread=0.6,
+                            bright=1.4)
+                for st in range(4):
+                    s.chord("gpad", t0 + beat + st * 0.25, 0.12, [m + 24 for m in v[1:]], ins.saw_pad, 0.07,
+                            spread=0.9, attack=0.003, rel=0.04, cutoff=5000, voices=2)
+            tones = sorted(set(v)) + [m + 12 for m in sorted(set(v))]
+            for i in range(8):
+                s.note("arp", t0 + i * 0.25, 0.14, tones[i % len(tones)] + 12, ins.pulse, 0.17 + 0.012 * i,
+                       i / 7.0 - 0.5, duty=0.5, tilt=6.0, rel=0.03)
 
 
 def gate_env(n, pattern=(1, 1, 0, 1), duty=0.6):
@@ -152,34 +226,36 @@ def layered(rec, kind):
                 for st in range(first, 16):
                     s.drum(mm.step(bar, st), K["snare"], 0.3 + 0.5 * (st - first) / (16 - first))
 
+    # No recording on top: the title melody over the new drums sounded like two tracks at once. The harmony comes
+    # from synthesized chords on the recording's own changes, and the bass from its low end, cut steeply at 200 Hz
+    # so no melody leaks in.
     r = song_coords(rec)
-    s.buses["rec"] = r.copy()
-    low = saturate(lp(r, 220, 2, periodic=True) * 4.0, 1.8)
+    low = saturate(lp(r, 200, 4, periodic=True) * 4.0, 1.8)
     s.buses["low"] = low / (np.max(np.abs(low)) + 1e-9) * np.max(np.abs(r))
-    if kind in ("hostile", "uprise"):
-        g = gate_env(L, (1, 1, 0, 1) if kind == "hostile" else (1, 1, 1, 1), 0.55)
-        hi = hp(r, 700 if kind == "hostile" else 1500, 2, periodic=True)
-        if kind == "hostile":
-            hi = bitcrush(hi, 7, 2)
-        s.buses["gate"] = hi * g[:, None]
+    {"normal": chord_bed, "hostile": hard_bed, "uprise": build_bed}[kind](s)
 
     cfg = {
         "normal": (dict(
             drums=dict(lp=12000, drive=1.3, rev=0.04, gain=0.75),
-            rec=dict(gain=1.0, rev=0.05),
-            low=dict(gain=0.35, lp=900),
-        ), dict(lufs=-15.5, hp=35, lp=16000, air=2.0, wow=0.0, crackle=0.0, pump=0.25, tape=1.3)),
+            low=dict(gain=0.42, lp=900),
+            pad=dict(gain=0.5, lp=2600, rev=0.3),
+            keys=dict(gain=0.45, lp=5000, rev=0.18, echo=0.06),
+        ), dict(lufs=-15.5, hp=35, lp=16000, air=2.0, wow=0.0, crackle=0.0, pump=0.3, tape=1.3)),
         "hostile": (dict(
             drums=dict(lp=13000, drive=1.55, rev=0.05, gain=0.9),
-            rec=dict(gain=0.9, lp=9000),
-            low=dict(gain=0.6, lp=1200, drive=1.6),
-            gate=dict(gain=0.55, rev=0.12, echo=0.12),
+            low=dict(gain=0.62, lp=1200, drive=1.6),
+            pad=dict(gain=0.5, lp=2000, rev=0.25),
+            stab=dict(gain=0.55, lp=4500, drive=1.2, rev=0.15),
+            gpad=dict(gain=0.5, lp=4000, rev=0.2),
+            arp=dict(gain=0.5, lp=8000, crush=(7, 2), rev=0.1, echo=0.12),
         ), dict(lufs=-14.5, hp=35, lp=15000, air=3.0, wow=0.0, crackle=0.0, pump=0.42, tape=1.55)),
         "uprise": (dict(
             drums=dict(lp=14000, drive=1.4, rev=0.06, gain=0.88),
-            rec=dict(gain=1.0, rev=0.08),
-            low=dict(gain=0.45, lp=1000, drive=1.3),
-            gate=dict(gain=0.45, rev=0.2, echo=0.15),
+            low=dict(gain=0.5, lp=1000, drive=1.3),
+            pad=dict(gain=0.5, lp=4500, rev=0.32),
+            keys=dict(gain=0.5, lp=7000, rev=0.18, echo=0.06),
+            gpad=dict(gain=0.4, lp=9000, rev=0.25, echo=0.12),
+            arp=dict(gain=0.5, lp=8000, rev=0.15, echo=0.15),
         ), dict(lufs=-14.0, hp=35, lp=17000, air=4.0, wow=0.0, crackle=0.0, pump=0.38, tape=1.45)),
     }[kind]
     return loop_coords(mm.mixdown(s, cfg[0], cfg[1]))
