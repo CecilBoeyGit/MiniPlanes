@@ -366,7 +366,7 @@ namespace MiniPlanes
             _gm.menu.Close();
             _gm.menu.Close();
 
-            // Glass panels in front of a few 3D things, to see them bend.
+            // Comic panels in front of a few 3D things, to see them stand out.
             var behind = new GameObject("GlassBackdrop").transform;
             for (int i = 0; i < 5; i++)
             {
@@ -377,7 +377,7 @@ namespace MiniPlanes
             }
             _gm.menu.ShowStart(_gm.levels);
             yield return WaitSeconds(0.3f);
-            Shoot("glass_menu_over_scene");
+            Shoot("comic_menu_over_scene");
             Destroy(behind.gameObject);
             _gm.menu.Close();
 
@@ -902,19 +902,33 @@ namespace MiniPlanes
             yield return AbortToMenu();
 
             Check("the start panel curves around the player", _gm.menu.poke.GetComponent<CurvedCanvas>().IsCurved);
-            int glassMenu = 0, solidMenu = 0;
+            int comicMenu = 0, plainMenu = 0, seeThrough = 0, shadowed = 0;
             foreach (var img in _gm.menu.GetComponentsInChildren<UnityEngine.UI.Image>(true))
             {
-                if (UiGlass.IsGlass(img)) glassMenu++;
-                else if (img.sprite != null && img.sprite.name == UiGlass.RoundedSprite) solidMenu++;
+                if (img.GetComponent<ComicShadow>() != null) continue;
+                if (UiComic.IsComic(img))
+                {
+                    comicMenu++;
+                    if (img.color.a < 0.999f) seeThrough++;
+                    foreach (Transform sibling in img.transform.parent)
+                    {
+                        var cs = sibling.GetComponent<ComicShadow>();
+                        if (cs != null && cs.target == img.rectTransform) { shadowed++; break; }
+                    }
+                }
+                else if (img.sprite != null && img.sprite.name == UiComic.RoundedSprite) plainMenu++;
             }
-            Check("the menu's panels and buttons are glass", glassMenu >= 10 && solidMenu == 0, glassMenu + " glass, " + solidMenu + " still solid");
-            Check("the pause panel and wrist button are glass",
-                Array.Exists(_gm.pausePanel.GetComponentsInChildren<UnityEngine.UI.Image>(true), UiGlass.IsGlass) &&
-                Array.Exists(_gm.wristMenu.GetComponentsInChildren<UnityEngine.UI.Image>(true), UiGlass.IsGlass));
+            Check("the menu's panels and buttons are comic-shaded", comicMenu >= 10 && plainMenu == 0, comicMenu + " comic, " + plainMenu + " still plain");
+            Check("they are solid, not see-through", seeThrough == 0, seeThrough + " see-through");
+            Check("each casts a drop shadow", shadowed == comicMenu, shadowed + " of " + comicMenu);
+            Check("the pause panel and wrist button are comic-shaded",
+                Array.Exists(_gm.pausePanel.GetComponentsInChildren<UnityEngine.UI.Image>(true), UiComic.IsComic) &&
+                Array.Exists(_gm.wristMenu.GetComponentsInChildren<UnityEngine.UI.Image>(true), UiComic.IsComic));
+            // A hidden button's shadow hides with it.
+            var hiddenShadow = Array.Find(_gm.menu.GetComponentsInChildren<ComicShadow>(true), cs => cs.target != null && !cs.target.gameObject.activeSelf && cs.gameObject.activeInHierarchy);
+            Check("a hidden button's shadow hides too", hiddenShadow == null || !hiddenShadow.GetComponent<UnityEngine.UI.Image>().enabled);
             var urp = UnityEngine.Rendering.GraphicsSettings.currentRenderPipeline as UnityEngine.Rendering.Universal.UniversalRenderPipelineAsset;
-            Check("the glass is firm enough to read through", _gm.art.uiGlass != null && _gm.art.uiGlass.GetFloat("_Opacity") >= 0.75f && _gm.art.uiGlass.GetFloat("_TintStrength") >= 0.75f);
-            Check("the scene behind the glass is available to bend", urp != null && urp.supportsCameraOpaqueTexture);
+            Check("no copy of the scene is made any more", urp != null && !urp.supportsCameraOpaqueTexture);
             Check("the start panel shows the coins", _gm.menu.startCoins != null && _gm.menu.startCoins.text == Progression.Coins.ToString(),
                 _gm.menu.startCoins != null ? _gm.menu.startCoins.text : "none");
         }
@@ -2502,7 +2516,7 @@ namespace MiniPlanes
             float gap = splash.ButtonShownAt - splash.LogoShownAt;
             Check("Start appears 1.5 s after the logo is fully shown", splash.LogoShown && splash.ButtonShown && gap >= splash.buttonDelaySeconds - 0.05f,
                 gap.ToString("F2") + " s after");
-            Check("the Start button is rounded glass", UiGlass.IsGlass(splash.startButton.GetComponentInChildren<UnityEngine.UI.Image>()));
+            Check("the Start button is comic-shaded", UiComic.IsComic(splash.startButton.GetComponentInChildren<UnityEngine.UI.Image>()));
 
             var pos = splash.ButtonPosition();
             Check("the Start button can be found", pos.HasValue);
