@@ -34,7 +34,7 @@ except wave coins on `Infinite.asset`.
 
 - **Blue balloon**: a one-hit shield. **Gold balloon**: an automatic turret for 6 seconds that aims ahead of
   its targets and fires fast. Pinch a balloon's crosshair and drag it onto the path.
-- **Booster tubes**: glass tubes about as wide as a C ring, straight or curved, short or long. Pinch one and
+- **Booster tubes**: short glass tubes about as wide as a C ring, straight or curved, 6 to 14 cm long. Pinch one and
   it moves and turns with your hand, like a real object. Line it up where you remember the path goes: flying
   in one end and out the other boosts the plane for 3 seconds and uses the tube up. The plane touching the wall
   breaks it with no boost. Hands never break a tube; otherwise it vanishes when its time runs out.
@@ -60,9 +60,13 @@ except wave coins on `Infinite.asset`.
 
 Level 5 also hands out booster tubes. Level 7 opens with Infinite, after level 6, and Infinite doesn't need it.
 
-In Infinite, **floating islands** appear from wave 4 around you and the path, never on it. The plane
+In Infinite, **floating islands** (12 to 24 cm across) appear from wave 4 around you and the path, never on it. The plane
 crashes into them. Touching one with a hand shatters it into shards that drift slowly in every direction,
 across the path too; a shard hitting the plane also crashes it, and touching a shard turns it to dust.
+From the islands' second wave, **jamming towers** stand on some of them (one at first, then slowly more, up to 3, randomised
+each wave), under a struck-through wi-fi icon. While any tower stands, the warning that sounds when an enemy plane
+arrives is silenced. Towers go with their island, so smack the island (or the tower) to clear the jamming; the
+plane crashes into a tower as into an island.
 
 Every 5th wave is a **boss wave**: a giant zeppelin hangs in the distance and can't be destroyed. Between
 attacks it cruises a random way, left or right, round the flight path, then takes its next turn at bullet trails, mostly aimed at the plane (block them with your hands), batches of fighters launched
@@ -76,6 +80,10 @@ Every level has 3 lives (`lives`). Hits are per life: a low-risk level absorbs a
 A level passes when the plane finishes its path with enough ring passes (`requiredRingPasses`). The line
 only ever shows the part of the path still ahead of the plane.
 
+Tutorial Start pages draw icons in their text: write `{fighter}`, `{bomber}`, `{zeppelin}`, `{missile}`,
+`{shield}`, `{turret}`, `{bomb}` or `{tube}` in a level's `introCaption` (`InlineIcons`; the pictures are in
+`GameArt.captionIcons` and `Assets/MiniPlanes/Art/UI`).
+
 ## Sound
 
 Sound effects are in `Assets/MiniPlanes/Audio`, cut from the Skylooper sound collection by
@@ -83,6 +91,12 @@ Sound effects are in `Assets/MiniPlanes/Audio`, cut from the Skylooper sound col
 which sounds are heard from where they happen are in `Assets/MiniPlanes/Audio/GameSounds.asset`; rebuilding
 the scene keeps your changes. The plane hums with a looping propeller that rises when boosting. Pausing
 pauses world sounds; menu sounds still play.
+
+Ring scores, enemy engines, the enemy explosion and all music are synthesized by `Tools/Audio/synth` (see
+`Tools/Audio/SOURCES.md`). Music settings are in `Assets/MiniPlanes/Audio/GameMusic.asset`; `MusicDirector` follows the
+game on its own: a start-page theme, other menus, and in flight a normal mix that crossfades to a hostile one while
+enemy planes are up, a build from 70% of the path that peaks with a hit at the finish, and the zeppelin's own piece.
+The music dims under pause and jingles.
 
 ## Tuning
 
@@ -94,7 +108,7 @@ Everything gameplay-related is exposed in the Inspector:
   `turretFireInterval`, `turretHitRadius`), booster tubes and boost, islands, bombers, and the zeppelin
   (`bossLevel` and the `boss...` and `missile...` values, such as `missileHoldSeconds`).
 - **`Assets/MiniPlanes/Levels/Infinite.asset`**: start values and hard caps for the wave curve, and
-  `rampWaves` for how quickly it ramps; when tubes and islands start; `bossEvery` and `bossMissilesFrom`.
+  `rampWaves` for how quickly it ramps; when tubes and islands start; `towerStepWaves` and `capTowers` for jamming towers; `bossEvery` and `bossMissilesFrom`.
 - **`HandRing`** on each hand: C detection, fill time, `visualRadiusScale` (the bubble's size), `shapeFollow`
   (how closely it follows the fingers). **`RingMerger`** on `Game/RingMerger`: how close
   the hands must be to merge, merge time, big ring size. **`BubbleRingVisual`**: wobble and float.
@@ -116,7 +130,7 @@ so you can restyle them with your own sprites and fonts:
 | Prefab | What it is |
 |---|---|
 | `MenuPanel` | Start page, level intro with its Start button, result page and Hangar |
-| `CockpitHUD` | Progress, score, level, lives and coins, plus the caption line |
+| `CockpitHUD` | Progress bar with a sliding plane knob and a finish flag, score, level, lives and coins, plus the caption line |
 | `PausePanel` | Resume, Restart, Main Menu |
 | `WristMenuButton` | The palm-up Menu button |
 | `ShieldIcon`, `BombIcon`, `TurretIcon` | The icons above the balloons |
@@ -180,6 +194,7 @@ HUD, Hangar, stencil reveal, comic VFX, booster tubes, islands and the zeppelin 
 | `Enemies/BoosterTube.cs` | Booster tubes: their shapes, holding, and the clean-pass test. |
 | `Enemies/Zeppelin.cs`, `BossMissile.cs` | The boss and its attacks; palm-held missiles. |
 | `World/FloatingIslands.cs` | Infinite's islands, their shards and dust. |
+| `World/JammingTower.cs` | Towers on the islands that silence the enemy warning. |
 | `Audio/GameSounds.cs`, `Audio/Sfx.cs` | The sound list, and the pooled player every event calls. |
 | `UI/CurvedCanvas.cs`, `CurvedGraphic.cs`, `LazyFollow.cs` | Bending uGUI onto a cylinder; smooth follow. |
 | `UI/PokeCanvas.cs`, `PokeButton.cs`, `PokeScrollArea.cs` | Fingertip input for any canvas. |
