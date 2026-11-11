@@ -36,10 +36,12 @@ namespace MiniPlanes
         public Material boostTrail;
         [Tooltip("The see-through wall of a booster tube.")]
         public Material tubeGlass;
-        [Tooltip("Refracting glass for the menu, pause and wrist panels and their buttons. Empty keeps them solid.")]
-        public Material uiGlass;
-        [Tooltip("The rounded panel shape the glass uses, with the edge distance in red.")]
-        public Sprite uiGlassSprite;
+        [Tooltip("Comic shading for the menu, pause, wrist and splash panels and their buttons. Empty keeps them plain.")]
+        public Material uiComic;
+        [Tooltip("The rounded panel shape the comic shading uses: shade, highlight and ink in red, green and blue.")]
+        public Sprite uiComicSprite;
+        [Tooltip("The shape of the drop shadows behind comic panels and buttons.")]
+        public Sprite uiShadowSprite;
 
         [Header("Models")]
         public GameObject playerPlane;

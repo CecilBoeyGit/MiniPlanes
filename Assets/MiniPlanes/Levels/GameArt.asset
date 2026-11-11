@@ -30,8 +30,9 @@ MonoBehaviour:
   bossBullet: {fileID: 2100000, guid: b354fda047bffad49adf01372231ec15, type: 2}
   boostTrail: {fileID: 2100000, guid: 6f7ca3e59df37d4499b00faa64c0eae0, type: 2}
   tubeGlass: {fileID: 2100000, guid: f80d8fe86d559364d999afb70e482168, type: 2}
-  uiGlass: {fileID: 2100000, guid: 91a4e074baad22649a4e4a06d8490dc9, type: 2}
-  uiGlassSprite: {fileID: 21300000, guid: 19974b88ddd72d8449e275a918bcff17, type: 3}
+  uiComic: {fileID: 2100000, guid: 29207200b4b4d8b4e8cf5570eccd9896, type: 2}
+  uiComicSprite: {fileID: 21300000, guid: 2018d85a6b602ef419732d5c2f1e0df2, type: 3}
+  uiShadowSprite: {fileID: 21300000, guid: 87fa1638c6295214eab92391706bf750, type: 3}
   playerPlane: {fileID: 919132149155446097, guid: df0312f1c5a6f8d449f03b86be5fdca1, type: 3}
   enemyFighter: {fileID: 919132149155446097, guid: 00000c545f24dea4097c17eb51678e60, type: 3}
   enemyBomber: {fileID: 919132149155446097, guid: 3731c02602d396643be61d6417074d26, type: 3}

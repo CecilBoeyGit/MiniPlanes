@@ -7,8 +7,8 @@ Material:
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_Name: UiGlass
-  m_Shader: {fileID: 4800000, guid: 3e5c061b226cf1b4aaa65945a8ad67bc, type: 3}
+  m_Name: UiComic
+  m_Shader: {fileID: 4800000, guid: 3a59bdfab70f7e540b1ceab5f6bcff4b, type: 3}
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
   m_ValidKeywords: []
@@ -30,17 +30,14 @@ Material:
     m_Ints: []
     m_Floats:
     - _ColorMask: 15
-    - _EdgeRefraction: 0.035
-    - _Opacity: 0.8
-    - _Refraction: 0.006
-    - _RimLight: 0.45
-    - _Sheen: 0.12
+    - _Highlight: 0.55
+    - _ShadeDepth: 1
     - _Stencil: 0
     - _StencilComp: 8
     - _StencilOp: 0
     - _StencilReadMask: 255
     - _StencilWriteMask: 255
-    - _TintStrength: 0.78
-    m_Colors: []
+    m_Colors:
+    - _Ink: {r: 0.15999997, g: 0.12999997, b: 0.19999996, a: 1}
   m_BuildTextureStacks: []
   m_AllowLocking: 1

@@ -31,7 +31,7 @@ namespace MiniPlanes.Editor
             if (!AssetDatabase.IsValidFolder(Dir)) AssetDatabase.CreateFolder("Assets/MiniPlanes/Art", "UI");
             Write("White", 8, p => -1f, Color.white, 0f, 0);
             Write("Rounded", 96, p => RoundedBox(p, Vector2.zero, new Vector2(1f, 1f), 0.5f), Color.white, 0f, 24);
-            WriteGlass("RoundedGlass", 96, 24);
+            WriteComic("RoundedComic", 96, 24);
             Write("Circle", 64, p => Circle(p, Vector2.zero, 0.97f), Color.white, 0f, 0);
             Write("Ring", 64, p => Mathf.Abs(Circle(p, Vector2.zero, 0.84f)) - 0.12f, Color.white, 0f, 0);
             Icon("Heart", 128, new[]
@@ -339,7 +339,7 @@ namespace MiniPlanes.Editor
                 bool dirty = importer.textureType != TextureImporterType.Sprite || !importer.alphaIsTransparency ||
                              importer.wrapMode != TextureWrapMode.Clamp || !importer.mipmapEnabled;
                 if (Path.GetFileNameWithoutExtension(path) == "Rounded" && importer.spriteBorder == Vector4.zero) dirty = true;
-                if (Path.GetFileNameWithoutExtension(path) == "RoundedGlass") continue;
+                if (Path.GetFileNameWithoutExtension(path) == "RoundedComic") continue;
                 if (!dirty) continue;
                 importer.textureType = TextureImporterType.Sprite;
                 importer.spriteImportMode = SpriteImportMode.Single;
@@ -352,16 +352,18 @@ namespace MiniPlanes.Editor
         }
 
         /// <summary>
-        /// The glass panel sprite: the same rounded box as "Rounded" (and the same 9-slice border), with how far
-        /// each pixel is inside the edge stored in red, so the glass shader can bevel and catch light at the rim.
+        /// The comic panel sprite: the same rounded box as "Rounded" (and the same 9-slice border), with the
+        /// comic shading stored as amounts for the UIComic shader: red the cel shade (lower in a band along the
+        /// bottom), green a highlight band along the top, blue the ink outline. The bands sit inside the top and
+        /// bottom borders, so they keep their thickness however tall the panel is.
         /// </summary>
-        static void WriteGlass(string name, int size, int border)
+        static void WriteComic(string name, int size, int border)
         {
             string path = Dir + "/" + name + ".png";
             if (File.Exists(path)) return;
             var px = new Color[size * size];
             float pixel = 2f / size;
-            const float bevel = 0.42f;
+            const float ink = 0.13f;
             for (int y = 0; y < size; y++)
             {
                 for (int x = 0; x < size; x++)
@@ -369,8 +371,15 @@ namespace MiniPlanes.Editor
                     var p = new Vector2((x + 0.5f) * pixel - 1f, (y + 0.5f) * pixel - 1f);
                     float d = RoundedBox(p, Vector2.zero, new Vector2(1f, 1f), 0.5f);
                     float alpha = Mathf.Clamp01(0.5f - d / pixel);
-                    float inside = Mathf.Clamp01(-d / bevel);
-                    px[y * size + x] = new Color(inside, inside, inside, alpha);
+                    float depth = -d;   // how far inside the edge
+                    float outline = Mathf.Clamp01(0.5f - (depth - ink) / pixel);
+                    // A glossy band just inside the outline along the top.
+                    float top = Mathf.Clamp01((p.y - 0.55f) / 0.05f);
+                    float gloss = Mathf.Clamp01(0.5f - (depth - (ink + 0.15f)) / pixel) * Mathf.Clamp01(0.5f + (depth - (ink + 0.04f)) / pixel) * top;
+                    // A cel shade along the bottom.
+                    float bottom = Mathf.Clamp01((-0.55f - p.y) / 0.05f);
+                    float shade = Mathf.Clamp01(0.5f - (depth - (ink + 0.26f)) / pixel) * bottom;
+                    px[y * size + x] = new Color(1f - 0.24f * shade, gloss, outline, alpha);
                 }
             }
             var tex = new Texture2D(size, size, TextureFormat.RGBA32, false, true);

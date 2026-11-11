@@ -88,7 +88,8 @@ namespace MiniPlanes.Editor
             art.turretIcon = ui.turretIcon;
             art.lifeIcon = ui.lifeIcon;
             art.jamIcon = ui.jamIcon;
-            art.uiGlassSprite = MiniPlanesUiSprites.Load("RoundedGlass");
+            art.uiComicSprite = MiniPlanesUiSprites.Load("RoundedComic");
+            art.uiShadowSprite = MiniPlanesUiSprites.Load("Rounded");
             art.noTouchIcon = ui.noTouchIcon;
             art.cupIcon = ui.cupIcon;
             art.dragCursor = ui.dragCursor;
@@ -460,9 +461,7 @@ namespace MiniPlanes.Editor
             art.projectile = Matte("Projectile", new Color(1f, 0.82f, 0.3f, 1f), false, 0, StencilOp.Replace, 2000, 0f);
             art.bossBullet = Matte("BossBullet", new Color(1f, 0.42f, 0.3f, 1f), false, 0, StencilOp.Replace, 2000, 0f);
             art.boostTrail = Plain("BoostTrail", "MiniPlanes/Trail");
-            art.uiGlass = Plain("UiGlass", "MiniPlanes/UIGlass");
-            art.uiGlass.SetFloat("_TintStrength", 0.78f);
-            art.uiGlass.SetFloat("_Opacity", 0.8f);
+            art.uiComic = Plain("UiComic", "MiniPlanes/UIComic");
             art.tubeGlass = Plain("TubeGlass", "MiniPlanes/ShieldBubble");
             art.tubeGlass.SetColor("_BaseColor", new Color(1f, 0.78f, 0.45f, 1f));
             art.tubeGlass.SetFloat("_Alpha", 0.85f);

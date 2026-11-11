@@ -193,10 +193,10 @@ namespace MiniPlanes
 
             if (art != null)
             {
-                UiGlass.Apply(menu, art.uiGlass, art.uiGlassSprite);
-                UiGlass.Apply(pausePanel, art.uiGlass, art.uiGlassSprite);
-                UiGlass.Apply(wristMenu, art.uiGlass, art.uiGlassSprite);
-                UiGlass.Apply(splash, art.uiGlass, art.uiGlassSprite);
+                UiComic.Apply(menu, art.uiComic, art.uiComicSprite, art.uiShadowSprite);
+                UiComic.Apply(pausePanel, art.uiComic, art.uiComicSprite, art.uiShadowSprite);
+                UiComic.Apply(wristMenu, art.uiComic, art.uiComicSprite, art.uiShadowSprite);
+                UiComic.Apply(splash, art.uiComic, art.uiComicSprite, art.uiShadowSprite);
             }
 
             _islands = new GameObject("Islands").AddComponent<IslandField>();
