@@ -15,17 +15,19 @@ namespace MiniPlanes
         [Header("Curve")]
         [Tooltip("Waves taken to cover about 63% of the way from start to cap. Larger is gentler.")]
         public float rampWaves = 6f;
+        [Tooltip("The path's shape and speed ramp this many times more slowly than the enemies: 2 makes wave 5's path what wave 3's used to be.")]
+        public float pathRampStretch = 2f;
 
         [Header("Wave length")]
         public float waveDurationSeconds = 32f;
         public int ringsRequiredPerWave = 0;
 
         [Header("Plane")]
-        public float startSpeed = 0.3f;
+        public float startSpeed = 0.25f;
         public float capSpeed = 0.52f;
-        public float startRandomness = 0.3f;
+        public float startRandomness = 0.1f;
         public float capRandomness = 0.85f;
-        public float startArcDeg = 120f;
+        public float startArcDeg = 105f;
         public float capArcDeg = 165f;
 
         [Tooltip("Lives at the start of an Infinite run. They carry over from wave to wave.")]
@@ -34,10 +36,10 @@ namespace MiniPlanes
         public int coinsPerWave = 5;
 
         [Header("Path")]
-        public float startTurnRadius = 0.13f;
+        public float startTurnRadius = 0.145f;
         public float capTurnRadius = 0.08f;
         [Tooltip("Corkscrews, loops and orbits are allowed from this wave on.")]
-        public int loopsFromWave = 4;
+        public int loopsFromWave = 8;
 
         [Header("Fuel and balloons")]
         public int fuelFromWave = 1;
@@ -50,8 +52,8 @@ namespace MiniPlanes
         [Tooltip("The gold turret balloon is rare: one, on every this many waves.")]
         public int turretEveryWaves = 3;
 
-        [Header("Booster tubes (waves 1-2: 1, waves 3-5: 2, then this many)")]
-        public int tubesFromWave = 1;
+        [Header("Booster tubes (none in wave 1; wave 2: 1, waves 3-5: 2, then this many)")]
+        public int tubesFromWave = 2;
         public int maxTubesPerWave = 3;
 
         [Header("Floating islands")]
@@ -86,6 +88,16 @@ namespace MiniPlanes
             return 1f - Mathf.Exp(-Mathf.Max(0, wave - 1) / Mathf.Max(0.5f, rampWaves));
         }
 
+        /// <summary>
+        /// 0 at wave 1, approaching 1, for the path's speed and shape. It moves more slowly than the enemy
+        /// curve, so early waves fly simple, calm paths and the twists build up gradually.
+        /// </summary>
+        public float PathRamp(int wave)
+        {
+            float slowed = Mathf.Max(0f, wave - 1) / Mathf.Max(1f, pathRampStretch);
+            return 1f - Mathf.Exp(-slowed / Mathf.Max(0.5f, rampWaves));
+        }
+
         /// <summary>Writes wave settings into a runtime level instance.</summary>
         public void Apply(LevelConfig level, int wave)
         {
@@ -97,12 +109,13 @@ namespace MiniPlanes
             level.hitsToCrash = 1;
             level.preFlightSeconds = wave == 1 ? 3f : 1.5f;
             level.pathDurationSeconds = waveDurationSeconds;
-            level.planeSpeed = Mathf.Lerp(startSpeed, capSpeed, t);
-            level.randomness = Mathf.Lerp(startRandomness, capRandomness, t);
-            level.frontArcDeg = Mathf.Lerp(startArcDeg, capArcDeg, t);
+            float pt = PathRamp(wave);
+            level.planeSpeed = Mathf.Lerp(startSpeed, capSpeed, pt);
+            level.randomness = Mathf.Lerp(startRandomness, capRandomness, pt);
+            level.frontArcDeg = Mathf.Lerp(startArcDeg, capArcDeg, pt);
             level.revealMode = PathRevealMode.TimedAtStart;
             level.useFuel = wave >= fuelFromWave;
-            level.turnRadius = Mathf.Lerp(startTurnRadius, capTurnRadius, t);
+            level.turnRadius = Mathf.Lerp(startTurnRadius, capTurnRadius, pt);
             level.allowLoops = wave >= loopsFromWave;
             level.useBalloons = wave >= balloonsFromWave;
             level.shieldBalloonInterval = shieldInterval;
@@ -144,7 +157,7 @@ namespace MiniPlanes
             level.boosterTubeInterval = tubes > 0 ? level.pathDurationSeconds / (tubes + 0.5f) : 0f;
         }
 
-        /// <summary>Booster tubes in a wave: 1 in waves 1 and 2, 2 in waves 3 to 5, then the cap.</summary>
+        /// <summary>Booster tubes in a wave: none before tubesFromWave, 1 in wave 2, 2 in waves 3 to 5, then the cap.</summary>
         public int TubesForWave(int wave)
         {
             if (wave < tubesFromWave) return 0;

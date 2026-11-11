@@ -14,25 +14,26 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::MiniPlanes.InfiniteConfig
   baseLevel: {fileID: 11400000, guid: a365023b17dac1a44b8aae4d566ebdc8, type: 2}
   rampWaves: 6
+  pathRampStretch: 2
   waveDurationSeconds: 32
   ringsRequiredPerWave: 0
-  startSpeed: 0.3
+  startSpeed: 0.25
   capSpeed: 0.52
-  startRandomness: 0.3
+  startRandomness: 0.1
   capRandomness: 0.85
-  startArcDeg: 120
+  startArcDeg: 105
   capArcDeg: 165
   lives: 3
   coinsPerWave: 5
-  startTurnRadius: 0.13
+  startTurnRadius: 0.145
   capTurnRadius: 0.08
-  loopsFromWave: 4
+  loopsFromWave: 8
   fuelFromWave: 1
   balloonsFromWave: 3
   shieldInterval: 14
   maxShieldsPerWave: 2
   turretEveryWaves: 3
-  tubesFromWave: 1
+  tubesFromWave: 2
   maxTubesPerWave: 3
   islandsFromWave: 4
   startIslands: 3
